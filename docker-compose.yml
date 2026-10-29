@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bodybase
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: bodybase
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bodybase"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://bodybase:${POSTGRES_PASSWORD}@db:5432/bodybase
+      SECRET_KEY: ${SECRET_KEY}
+      PUBLIC_URL: ${PUBLIC_URL}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-0}
+      TOKEN_EXPIRE_DAYS: ${TOKEN_EXPIRE_DAYS:-30}
+      TIMEZONE: ${TIMEZONE:-Europe/Berlin}
+      SYNC_INTERVAL_MINUTES: ${SYNC_INTERVAL_MINUTES:-60}
+      BACKFILL_DAYS: ${BACKFILL_DAYS:-90}
+      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-}
+      COOKIE_SAMESITE: ${COOKIE_SAMESITE:-strict}
+      UPDATER_URL: ${UPDATER_URL:-http://updater:9000}
+    volumes:
+      - app_data:/data
+
+  # Führt Updates und Sicherungen aus dem Admin-Bereich aus. Kein veröffentlichter Port, nur das Backend erreicht
+  # ihn (mit Token). Der Zugriff auf den Docker-Socket entspricht Root-Rechten auf dem Server. Wer das nicht möchte,
+  # entfernt diesen Block und aktualisiert mit „bodybase update“ im Terminal.
+  updater:
+    build: ./updater
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+    volumes:
+      - .:/project
+      - ${BACKUP_DIR:-./backups}:/project/backups
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  db_data:
+  app_data:
