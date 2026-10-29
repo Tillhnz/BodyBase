@@ -68,7 +68,7 @@ Danach ist BodyBase unter `http://<IP-des-Containers>:8080` erreichbar. Das erst
 
 ## Von außen erreichbar machen
 
-Im Nginx Proxy Manager einen Proxy Host auf `<IP>:8080` anlegen, SSL aktivieren, dann im Container:
+Im Nginx Proxy Manager einen Proxy Host auf `<IP>:8080` anlegen, SSL aktivieren und die Adresse unter **Administration → Server → Öffentliche Adresse** eintragen. Oder im Container:
 
 ```bash
 bodybase url https://body.deine-domain.de

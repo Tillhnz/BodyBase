@@ -225,3 +225,19 @@ def test_delete_account(client):
     assert client.post("/api/me/delete", json={"password": "falsch"}, headers=headers).status_code == 403
     assert client.post("/api/me/delete", json={"password": "geheim-123"}, headers=headers).status_code == 204
     assert client.get("/api/me", headers=headers).status_code == 401
+
+
+def test_admin_public_url(client, admin):
+    from app.config import settings
+    before = settings.public_url
+    try:
+        r = client.put("/api/admin/settings", json={"values": {"public_url": "https://neu.example.de/"}}, headers=admin)
+        assert r.status_code == 200 and r.json()["values"]["public_url"] == "https://neu.example.de"
+        provs = client.get("/api/providers", headers=admin).json()
+        withings = next(p for p in provs if p["key"] == "withings")
+        assert withings["redirect_uri"] == "https://neu.example.de/api/oauth/withings/callback"
+        for bad in ("neu.example.de", "ftp://x.de", "https://x.de/pfad"):
+            r = client.put("/api/admin/settings", json={"values": {"public_url": bad}}, headers=admin)
+            assert r.status_code == 422
+    finally:
+        client.put("/api/admin/settings", json={"values": {"public_url": before}}, headers=admin)

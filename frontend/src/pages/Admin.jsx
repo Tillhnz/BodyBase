@@ -240,6 +240,12 @@ function Server() {
       <h2>Server</h2>
       <div className="stack">
         <Switch checked={v.allow_registration} onChange={(x) => setV({ ...v, allow_registration: x })}>Jeder darf ein Konto anlegen (sonst nur mit Einladung)</Switch>
+        <label>Öffentliche Adresse<input type="url" value={v.public_url} onChange={(e) => setV({ ...v, public_url: e.target.value })} placeholder="https://body.deine-domain.de" />
+          <span className="hint">Unter dieser Adresse ist BodyBase von außen erreichbar. Daraus entstehen die Rücksprung-Adressen für Strava, Withings &amp; Co.
+            ({(v.public_url || "https://…").replace(/\/+$/, "")}/api/oauth/&lt;anbieter&gt;/callback). Die meisten Anbieter verlangen HTTPS.
+            Nach einer Änderung die Callback-URLs bei den Anbietern anpassen.</span>
+          {v.public_url && !v.public_url.startsWith("https://") && <span className="hint warn">Ohne HTTPS lehnen Withings, Strava, Fitbit und andere die Anmeldung ab.</span>}
+        </label>
         <div className="form-grid">
           <label>Abgleich alle … Minuten<input inputMode="numeric" value={v.sync_interval_minutes} onChange={(e) => setV({ ...v, sync_interval_minutes: e.target.value })} />
             <span className="hint">15 bis 1440. Fitbit erlaubt nur 150 Anfragen pro Stunde, 60 ist ein guter Wert.</span></label>

@@ -15,6 +15,7 @@ from .models import ServerSetting
 
 # Optionen, die der Administrator in der Oberfläche ändern darf: Name -> (Typ, Grenzen)
 OPTIONS = {
+    "public_url": ("url", 300),
     "allow_registration": ("bool", None),
     "frame_ancestors": ("str", 500),
     "sync_interval_minutes": ("int", (15, 1440)),
@@ -111,7 +112,15 @@ def save_options(db: Session, values: dict) -> dict:
         if k not in OPTIONS:
             continue
         typ, lim = OPTIONS[k]
-        if typ == "bool":
+        if typ == "url":
+            from urllib.parse import urlsplit
+            v = str(v or "").strip().rstrip("/")
+            parts = urlsplit(v)
+            if parts.scheme not in ("http", "https") or not parts.hostname or len(v) > lim or parts.query or parts.fragment:
+                raise ValueError("Die öffentliche Adresse muss mit http:// oder https:// beginnen, z. B. https://body.example.de")
+            if parts.path not in ("",):
+                raise ValueError("Bitte nur die Adresse ohne Pfad angeben, z. B. https://body.example.de")
+        elif typ == "bool":
             v = bool(v)
         elif typ == "int":
             try:

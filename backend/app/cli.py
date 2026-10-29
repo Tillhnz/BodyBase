@@ -2,6 +2,7 @@
 
     docker compose exec backend python -m app.cli reset-password du@example.de NeuesPasswort
     docker compose exec backend python -m app.cli demo-data du@example.de
+    docker compose exec backend python -m app.cli set-url https://body.example.de
 """
 import sys
 
@@ -39,6 +40,15 @@ def main(argv: list[str]) -> int:
             u.role = "admin"
             db.commit()
             print("Ist jetzt Administrator.")
+            return 0
+        if cmd == "set-url" and len(argv) == 3:
+            from . import server_settings
+            try:
+                server_settings.save_options(db, {"public_url": argv[2]})
+            except ValueError as e:
+                print(e)
+                return 1
+            print("Öffentliche Adresse gespeichert.")
             return 0
         if cmd == "demo-data" and len(argv) >= 3:
             from .demo import generate

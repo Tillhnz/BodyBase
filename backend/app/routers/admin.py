@@ -162,7 +162,10 @@ class OptionsIn(BaseModel):
 
 @router.put("/settings")
 def put_options(data: OptionsIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    values = server_settings.save_options(db, data.values)
+    try:
+        values = server_settings.save_options(db, data.values)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
     audit.record(db, admin.email, "settings", ", ".join(sorted(data.values)))
     return {"values": values}
 

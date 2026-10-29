@@ -263,6 +263,9 @@ cmd_url() {
   require_install
   set_env PUBLIC_URL "${1%/}"
   (cd "$APP_DIR" && "${DOCKER[@]}" compose up -d)
+  # Auch in die Datenbank schreiben: Ein Wert aus Administration → Server hat sonst Vorrang vor der .env
+  (cd "$APP_DIR" && "${DOCKER[@]}" compose exec -T backend python -m app.cli set-url "${1%/}") || die "Die Adresse konnte nicht gespeichert werden."
+  (cd "$APP_DIR" && "${DOCKER[@]}" compose restart backend >/dev/null)
   ok "Öffentliche Adresse gesetzt: ${1%/}"
 }
 
