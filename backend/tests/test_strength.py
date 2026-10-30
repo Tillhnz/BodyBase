@@ -295,3 +295,9 @@ def test_overlap_rules():
     assert _similar(a, Activity(start=base + timedelta(minutes=10), duration_s=2700, sport="cardio", source="whoop"))
     assert not _similar(a, Activity(start=base + timedelta(minutes=10), duration_s=2700, sport="ride", source="whoop"))
     assert not _similar(a, Activity(start=base + timedelta(minutes=50), duration_s=3600, sport="strength", source="whoop"))
+
+
+def test_german_names_get_muscles():
+    from app.strength_catalog import guess_muscles
+    assert guess_muscles("Knieheben am Barren")[0] == "abs"
+    assert guess_muscles("Nackendrücken")[0] == "shoulders"
