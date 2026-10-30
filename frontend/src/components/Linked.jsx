@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { fmtDuration, fmtNum, fmtTime } from "../fmt.js";
 import { toast } from "./feedback.jsx";
+import HrChart from "./HrChart.jsx";
 
 const ZONE_COLORS = ["var(--mute)", "var(--c-body)", "var(--c-recovery)", "var(--c-nutrition)", "var(--c-activity)", "var(--c-heart)"];
 const ZONE_LABELS = ["Zone 0", "Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5"];
@@ -49,7 +50,7 @@ export default function Linked({ activityId, initial, title = "Verknüpfte Daten
   }
   const others = d.sources.filter((s) => !s.primary);
   const from = (k) => (d.filled_from?.[k] ? <span className="tiny muted">von {d.filled_from[k]}</span> : null);
-  const hasData = d.avg_hr || d.calories || d.load || d.hr_zones;
+  const hasData = d.avg_hr || d.calories || d.load || d.hr_zones || d.hr;
 
   return (
     <section className="panel linked">
@@ -65,7 +66,8 @@ export default function Linked({ activityId, initial, title = "Verknüpfte Daten
           {d.load ? <div><b>{fmtNum(d.load, d.load < 25 ? 1 : 0)}</b><small>Belastung / Strain</small>{from("load")}</div> : null}
         </div>
       ) : <p className="muted small">Noch keine Puls- oder Kaloriendaten. Trägst du dabei eine Uhr oder WHOOP, verknüpft BodyBase die Einheit automatisch, sobald sie dort ankommt.</p>}
-      {d.hr_zones && <HrZones zones={d.hr_zones} />}
+      {d.hr && <HrChart series={d.hr} />}
+      {d.hr_zones && <><div className="tiny muted" style={{ marginTop: "0.6rem" }}>Zonen laut {d.filled_from?.hr_zones || "Quelle"}</div><HrZones zones={d.hr_zones} /></>}
 
       {others.length > 0 && (
         <div className="linked-list">

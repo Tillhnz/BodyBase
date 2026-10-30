@@ -717,3 +717,14 @@ details > summary { list-style-position: inside; }
 .linked-cands { margin-top: 0.9rem; }
 .linked-cands summary { cursor: pointer; color: var(--mute); margin-bottom: 0.5rem; }
 .linked-cands .version-row { margin-bottom: 0.4rem; }
+
+/* ---------- Puls ---------- */
+
+.hr-badge { font: inherit; display: flex; flex-direction: column; align-items: flex-start; font-weight: 600; background: none; border: 0; padding: 0; cursor: pointer; color: var(--mute); }
+.hr-badge small { font-size: 0.72rem; color: var(--mute); font-weight: 400; }
+.hr-badge span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.hr-badge.live span { color: var(--c); font-family: var(--font-display); font-size: 1.25rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.hr-heart { width: 10px; height: 10px; border-radius: 50%; background: var(--c); animation: pulse 0.9s ease-in-out infinite; }
+.hr-chart { margin: 0.4rem 0 0.6rem; }
+.hr-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
+.hr-mark { stroke: var(--chalk); stroke-width: 1.5; opacity: 0.55; }

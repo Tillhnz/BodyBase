@@ -310,6 +310,13 @@ def get_activity(activity_id: int, user: User = Depends(current_user), db: Sessi
     return out
 
 
+@router.get("/heart-rate/recent")
+def heart_rate_recent(hours: int = Query(72, ge=1, le=72), user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Puls in voller Auflösung, nur für die letzten 3 Tage gespeichert."""
+    from .. import heartrate
+    return heartrate.recent(db, user.id, hours)
+
+
 # ---------- Verknüpfen von Einheiten aus mehreren Quellen ----------
 
 def linked_info(db: Session, a: Activity) -> dict:
@@ -333,7 +340,8 @@ def linked_info(db: Session, a: Activity) -> dict:
                       "overlap": round(overlap_ratio(primary, c), 2)})
     cands.sort(key=lambda c: -c["overlap"])
     names = {k: ("Einzelmessungen Puls" if v == "heart_rate" else providers.name_of(v)) for k, v in filled.items()}
-    return {"activity_id": primary.id, "avg_hr": primary.avg_hr, "max_hr": primary.max_hr, "calories": primary.calories,
+    hr = next((x.details["hr"] for x in group if x.details and x.details.get("hr")), None)
+    return {"hr": hr, "activity_id": primary.id, "avg_hr": primary.avg_hr, "max_hr": primary.max_hr, "calories": primary.calories,
             "load": primary.load, "hr_zones": (primary.details or {}).get("hr_zones"), "filled_from": names,
             "sources": sources, "candidates": cands[:6]}
 

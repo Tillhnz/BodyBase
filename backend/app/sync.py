@@ -154,11 +154,20 @@ def _loop() -> None:
     with SessionLocal() as db:
         db.execute(update(Connection).values(syncing=False))
         db.commit()
+    last_hr = 0.0
     while True:
         try:
             _tick()
         except Exception:
             log.exception("Planung der Abgleiche fehlgeschlagen")
+        if time.time() - last_hr > 1800:
+            last_hr = time.time()
+            try:
+                from . import heartrate
+                with SessionLocal() as db:
+                    heartrate.maintenance(db)
+            except Exception:
+                log.exception("Puls-Wartung fehlgeschlagen")
         time.sleep(60)
 
 

@@ -243,6 +243,7 @@ class Workout(Base):
     sets_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     prs: Mapped[list | None] = mapped_column(JSON, nullable=True)  # bei diesem Training aufgestellte Rekorde
+    hr: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # Pulsverlauf live per Bluetooth {start, t, v, marks}
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
@@ -273,3 +274,19 @@ class ActiveWorkout(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     data: Mapped[dict] = mapped_column(JSON)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class HeartRateRaw(Base):
+    """Einzelne Pulswerte, nur die letzten Tage (siehe heartrate.py). Danach bleiben Stundenmittel in samples
+    und der Verlauf jeder Trainingseinheit in activities.details["hr"]."""
+    __tablename__ = "heart_rate_raw"
+    __table_args__ = (
+        UniqueConstraint("user_id", "source", "ts", name="uq_hr_raw"),
+        Index("ix_hr_raw_user_ts", "user_id", "ts"),
+    )
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String(40))
+    ts: Mapped[datetime] = mapped_column(DateTime)
+    bpm: Mapped[float] = mapped_column(Float)

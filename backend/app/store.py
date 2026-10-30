@@ -109,13 +109,22 @@ class Writer:
     counts: dict = field(default_factory=lambda: {"samples": 0, "activities": 0, "sleep": 0, "skipped": 0})
     _samples: dict = field(default_factory=dict)
     _touched_days: set = field(default_factory=set)
+    _hr: dict = field(default_factory=dict)
+    _hr_range: tuple | None = None
 
     # ---------- Messwerte ----------
 
-    def sample(self, metric: str, ts: datetime | None, value) -> None:
+    def sample(self, metric: str, ts: datetime | None, value, aggregated: bool = False) -> None:
+        """aggregated=True: der Wert ist schon ein Stundenmittel (Puls aus dem Apple-Health-Export)."""
         v = _num(value)
         if ts is None or v is None or not M.plausible(metric, v):
             self.counts["skipped"] += 1
+            return
+        if metric == "heart_rate" and not aggregated:
+            # Einzelwerte: kurzzeitig roh speichern, Stundenmittel und Trainingsverläufe entstehen daraus
+            self._hr[ts.replace(microsecond=0)] = v
+            if len(self._hr) >= self.batch:
+                self.flush_hr()
             return
         self._samples[(metric, ts.replace(microsecond=0))] = v
         if len(self._samples) >= self.batch:
@@ -228,7 +237,22 @@ class Writer:
             if row.hrv is not None:
                 self.sample("hrv", row.end, row.hrv)
 
+    def flush_hr(self) -> None:
+        if not self._hr:
+            return
+        from . import heartrate
+        items, self._hr = self._hr, {}
+        n = heartrate.store_raw(self.db, self.user_id, self.source, items)
+        self.counts["samples"] = self.counts.get("samples", 0) + n
+        lo, hi = min(items), max(items)
+        self._hr_range = (min(lo, self._hr_range[0]), max(hi, self._hr_range[1])) if self._hr_range else (lo, hi)
+
     def flush(self) -> dict:
+        self.flush_hr()
+        if self._hr_range:
+            from . import heartrate
+            heartrate.after_ingest(self.db, self.user_id, *self._hr_range)
+            self._hr_range = None
         self.flush_samples()
         self.db.commit()
         return self.counts

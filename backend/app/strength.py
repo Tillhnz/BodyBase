@@ -210,6 +210,8 @@ def save_workout(db: Session, user: User, data: dict, workout: Workout | None = 
     workout.day = local_day(workout.start)
     workout.updated_at = utcnow()
     workout.layout = [{k: ex[k] for k in ("exercise_id", "notes", "rest_s", "superset")} for ex in exercises if ex["sets"]]
+    if "hr" in data:
+        workout.hr = clean_hr(data.get("hr"), workout.start)
     db.flush()
     if workout.source_id.startswith("tmp-"):
         workout.source_id = str(workout.id)
@@ -237,6 +239,29 @@ def save_workout(db: Session, user: User, data: dict, workout: Workout | None = 
     if mirror:
         mirror_activity(db, user, workout)
     return workout
+
+
+def clean_hr(hr, start: datetime) -> dict | None:
+    """Live aufgezeichneter Puls: {start, t: [s], v: [bpm], marks: [[s, text]]} prüfen und verdichten."""
+    from . import heartrate
+    if not isinstance(hr, dict):
+        return None
+    t, v = hr.get("t") or [], hr.get("v") or []
+    if not isinstance(t, list) or not isinstance(v, list) or len(t) != len(v) or len(t) > 20000:
+        return None
+    base = parse_iso(hr.get("start")) or start
+    pts = []
+    for x, y in zip(t, v):
+        if isinstance(x, (int, float)) and isinstance(y, (int, float)) and 0 <= x <= 43200:
+            pts.append((base + timedelta(seconds=float(x)), float(y)))
+    marks = []
+    for m in (hr.get("marks") or [])[:400]:
+        if isinstance(m, list) and len(m) == 2 and isinstance(m[0], (int, float)):
+            marks.append([round((base - start).total_seconds() + float(m[0])), str(m[1])[:60]])
+    s = heartrate.make_series(start, pts, str(hr.get("source") or "bluetooth")[:40], marks)
+    if s and hr.get("device"):
+        s["device"] = str(hr["device"])[:60]
+    return s
 
 
 def purge_user(db: Session, user_id: int) -> None:
@@ -268,10 +293,21 @@ def mirror_activity(db: Session, user: User, w: Workout) -> None:
         b.pop("_pos")
     duration = (w.end - w.start).total_seconds() if w.end else None
     writer = Writer(db, user.id, SOURCE)
-    writer.activity(ActivityIn(
+    details = {"exercises": blocks, "sets": w.sets_count, "workout_id": w.id}
+    if w.hr:
+        details["hr"] = w.hr
+    row = writer.activity(ActivityIn(
         source_id=f"w{w.id}", start=w.start, sport="strength", sport_raw="strength", name=w.name, duration_s=duration,
-        volume_kg=w.volume_kg or None, details={"exercises": blocks, "sets": w.sets_count, "workout_id": w.id},
+        volume_kg=w.volume_kg or None, details=details,
+        avg_hr=(w.hr or {}).get("avg"), max_hr=(w.hr or {}).get("max"),
     ))
+    if row is not None and not w.hr and (row.details or {}).get("hr", {}).get("source") == "bluetooth":
+        row.details = {k: v for k, v in row.details.items() if k != "hr"}  # Verlauf wurde entfernt
+        db.commit()
+    if row is not None and not w.hr:
+        from . import heartrate
+        heartrate.attach(db, row)
+        db.commit()
     writer.flush()
 
 

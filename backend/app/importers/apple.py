@@ -9,7 +9,8 @@ import logging
 import xml.etree.ElementTree as ET
 import zipfile
 from collections import defaultdict
-from datetime import datetime, timedelta
+from array import array
+from datetime import datetime, timedelta, timezone
 
 from .. import metrics as M
 from ..store import ActivityIn, SleepIn, Writer
@@ -252,9 +253,47 @@ def _attach_route(w: Writer, row, zf, ref: str) -> None:
         w.db.rollback()
 
 
+def _apple_hr_details(w: Writer, workout_rows: list[int]) -> None:
+    """Pulsverlauf je Training aus den Einzelwerten des Exports; Einzelwerte der letzten Tage roh behalten."""
+    from bisect import bisect_left, bisect_right
+
+    from .. import heartrate
+    from ..models import Activity
+    ts, vals = w._apple_hr
+    w._apple_hr = None
+    if not ts:
+        return
+    order = sorted(range(len(ts)), key=ts.__getitem__)
+    ts_s = [ts[i] for i in order]
+    v_s = [vals[i] for i in order]
+
+    def utc(x):
+        return datetime.fromtimestamp(x, timezone.utc).replace(tzinfo=None)
+    for rid in workout_rows:
+        a = w.db.get(Activity, rid)
+        end = heartrate._end(a) if a else None
+        if not a or not end or (a.details or {}).get("hr"):
+            continue
+        lo = bisect_left(ts_s, a.start.replace(tzinfo=timezone.utc).timestamp())
+        hi = bisect_right(ts_s, end.replace(tzinfo=timezone.utc).timestamp())
+        s = heartrate.make_series(a.start, [(utc(ts_s[i]), v_s[i]) for i in range(lo, hi)], "apple_health")
+        if s:
+            a.details = {**(a.details or {}), "hr": s}
+            if a.avg_hr is None:
+                a.avg_hr = s["avg"]
+    w.db.commit()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=heartrate.RAW_DAYS)).timestamp()
+    start = bisect_left(ts_s, cutoff)
+    recent = {utc(ts_s[i]).replace(microsecond=0): float(v_s[i]) for i in range(start, len(ts_s))}
+    if recent:
+        heartrate.store_raw(w.db, w.user_id, "apple_health", recent)
+
+
 def import_export_xml(w: Writer, path: str, progress=None, since: datetime | None = None) -> dict:
     zf = zipfile.ZipFile(path) if zipfile.is_zipfile(path) else None
     f, size = open_export(path)
+    w._apple_hr = (array("d"), array("f"))
+    workout_rows: list[int] = []
     stream = io.BufferedReader(_Counting(f, size, progress), buffer_size=1024 * 1024)
     daily_sums: dict = defaultdict(float)  # (metric, day, quelle) -> Summe
     hourly: dict = defaultdict(lambda: [0.0, 0])  # (metric, Stunde) -> [Summe, Anzahl]
@@ -276,6 +315,8 @@ def import_export_xml(w: Writer, path: str, progress=None, since: datetime | Non
                 a = _workout(el)
                 if a and (since is None or a.start >= since):
                     row = w.activity(a)
+                    if row is not None:
+                        workout_rows.append(row.id)
                     route = el.find("WorkoutRoute/FileReference")
                     if row is not None and route is not None and zf is not None:
                         _attach_route(w, row, zf, route.get("path") or "")
@@ -296,7 +337,8 @@ def import_export_xml(w: Writer, path: str, progress=None, since: datetime | Non
     for (metric, day), total in best.items():
         w.daily(metric, day, total)
     for (metric, hour), (total, cnt) in hourly.items():
-        w.sample(metric, hour + timedelta(minutes=30), total / cnt)
+        w.sample(metric, hour + timedelta(minutes=30), total / cnt, aggregated=True)
+    _apple_hr_details(w, workout_rows)
     for day, minutes in mindful.items():
         w.daily("mindful_minutes", day, minutes)
     for s in build_sleep_sessions(sleep_parts):
@@ -336,6 +378,10 @@ def _record(a: dict, w: Writer, daily_sums, hourly, sleep_parts, mindful, since)
     if m.agg == "sum":
         daily_sums[(metric, local_day(start), a.get("sourceName", ""))] += value
     elif metric in HOURLY:
+        raw = getattr(w, "_apple_hr", None)
+        if metric == "heart_rate" and raw is not None:  # Einzelwerte für Trainingsverläufe und die letzten Tage
+            raw[0].append(start.timestamp() if start.tzinfo else start.replace(tzinfo=timezone.utc).timestamp())
+            raw[1].append(value)
         hour = start.replace(minute=0, second=0, microsecond=0)
         bucket = hourly[(metric, hour)]
         bucket[0] += value

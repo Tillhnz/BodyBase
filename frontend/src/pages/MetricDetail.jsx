@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import HrChart from "../components/HrChart.jsx";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { BarChart, LineChart } from "../components/charts.jsx";
@@ -85,6 +86,8 @@ export default function MetricDetail({ user, onUser }) {
         </div>
       </div>
 
+      {key === "heart_rate" && <RecentHeartRate />}
+
       <section className="panel">
         <div className="panel-head">
           <Segmented value={days} onChange={setDays} options={RANGES} label="Zeitraum" />
@@ -161,5 +164,25 @@ export default function MetricDetail({ user, onUser }) {
       </div>
       {entry && <EntryDialog metric={key} onClose={() => setEntry(false)} onSaved={() => setReload((n) => n + 1)} />}
     </div>
+  );
+}
+
+
+/** Puls der letzten 3 Tage in voller Auflösung (ältere Werte gibt es nur als Stundenmittel). */
+function RecentHeartRate() {
+  const [hours, setHours] = useState(24);
+  const [data, setData] = useState(null);
+  useEffect(() => { api.get(`/heart-rate/recent?hours=${hours}`).then(setData).catch(() => setData(null)); }, [hours]);
+  return (
+    <section className="panel cat-heart">
+      <div className="panel-head">
+        <h2>Verlauf in voller Auflösung</h2>
+        <Segmented value={hours} onChange={setHours} options={[{ value: 6, label: "6 h" }, { value: 24, label: "24 h" }, { value: 72, label: "3 Tage" }]} label="Zeitraum" />
+      </div>
+      {data?.t?.length ? <HrChart series={data} height={200} /> : (
+        <p className="muted small">Keine Einzelwerte in diesem Zeitraum. Sie kommen von Health Connect, Health Auto Export oder eigenen Skripten.
+          BodyBase behält Einzelwerte 3 Tage, danach Stundenmittel. Trainingseinheiten behalten ihren vollen Verlauf.</p>
+      )}
+    </section>
   );
 }

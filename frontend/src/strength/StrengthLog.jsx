@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { confirmDialog, Loading, toast } from "../components/feedback.jsx";
 import { EmptyState, Modal } from "../components/ui.jsx";
+import { connectHr, disconnectHr, hrState, hrSupported, hrUnsupportedReason, reconnectKnownHr, subscribeHr, ZONES, zoneOf } from "../hr.js";
 import BlockEditor from "./BlockEditor.jsx";
 import {
   draftStats, fmtClock, fmtRest, fmtVolume, fromDraftBlock, loadExercises, newWorkout, parseClock, parseNum, readLocalActive, restAlarm,
@@ -49,8 +50,11 @@ export default function StrengthLog() {
     }).catch(() => setW(local || null));
   }, []);
 
+  const wRef = useRef(w);
+  wRef.current = w;
   function change(next) {
-    const value = typeof next === "function" ? next(w) : next;
+    const value = typeof next === "function" ? next(wRef.current) : next;
+    wRef.current = value;
     const stamped = { ...value, saved_at: Date.now() };
     setW(stamped);
     writeLocalActive(stamped);
@@ -58,6 +62,30 @@ export default function StrengthLog() {
     saveTimer.current = setTimeout(() => api.put("/strength/active", stamped).catch(() => {}), 1200);
   }
   useEffect(() => () => clearTimeout(saveTimer.current), []);
+
+  // Live-Puls per Bluetooth: Werte sammeln (höchstens alle 2 s) und alle 15 s ins Training übernehmen
+  const hr = useHr();
+  const hrBuf = useRef({ t: [], v: [], last: 0 });
+  useEffect(() => {
+    const cur = wRef.current;
+    if (!cur || hr.status !== "connected" || !hr.bpm || hr.at - hrBuf.current.last < 2000) return;
+    hrBuf.current.last = hr.at;
+    hrBuf.current.t.push(Math.round((hr.at - new Date(cur.start).getTime()) / 1000));
+    hrBuf.current.v.push(hr.bpm);
+  }, [hr.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  function flushHr(cur) {
+    const b = hrBuf.current;
+    if (!b.t.length) return cur;
+    const prev = cur.hr || { start: cur.start, t: [], v: [], marks: [], source: "bluetooth" };
+    const next = { ...prev, t: [...prev.t, ...b.t], v: [...prev.v, ...b.v], device: hrState().device || prev.device };
+    hrBuf.current = { t: [], v: [], last: b.last };
+    return { ...cur, hr: next };
+  }
+  useEffect(() => {
+    const id = setInterval(() => { if (hrBuf.current.t.length && wRef.current) change((cur) => flushHr(cur)); }, 15000);
+    return () => clearInterval(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (w?.hr) reconnectKnownHr(); }, [!!w]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Werte vom letzten Mal
   const ids = useMemo(() => [...new Set((w?.exercises || []).map((b) => b.exercise_id))].sort().join(","), [w]);
@@ -93,7 +121,17 @@ export default function StrengthLog() {
 
   function onSetDone(block) {
     const s = block.rest_s || 0;
-    if (s > 0) change((cur) => ({ ...cur, rest: { end: Date.now() + s * 1000, total: s } }));
+    const name = ex.byId.get(block.exercise_id)?.name || "Satz";
+    change((cur) => {
+      let next = s > 0 ? { ...cur, rest: { end: Date.now() + s * 1000, total: s } } : cur;
+      if (hrState().status === "connected" || next.hr) { // Satzende im Pulsverlauf markieren
+        next = flushHr(next);
+        const base = next.hr || { start: next.start, t: [], v: [], marks: [], source: "bluetooth" };
+        const at = Math.round((Date.now() - new Date(next.start).getTime()) / 1000);
+        next = { ...next, hr: { ...base, marks: [...(base.marks || []), [at, name]] } };
+      }
+      return next;
+    });
   }
   const shiftRest = (d) => change((cur) => (cur.rest ? { ...cur, rest: { ...cur.rest, end: cur.rest.end + d * 1000, total: Math.max(1, cur.rest.total + d) } } : cur));
 
@@ -114,11 +152,12 @@ export default function StrengthLog() {
             <span><small>Dauer</small>{fmtClock(elapsed)}</span>
             <span><small>Volumen</small>{fmtVolume(stats.volume)}</span>
             <span><small>Sätze</small>{stats.sets}</span>
+            <HrBadge hr={hr} />
           </div>
         </div>
         <div className="actions" style={{ margin: 0 }}>
           <button className="btn danger" onClick={discard}>Verwerfen</button>
-          <button className="btn primary" onClick={() => setFinishing(true)}>Beenden</button>
+          <button className="btn primary" onClick={() => { change((cur) => flushHr(cur)); setFinishing(true); }}>Beenden</button>
         </div>
       </div>
 
@@ -147,6 +186,39 @@ export default function StrengthLog() {
   );
 }
 
+function useHr() {
+  const [s, setS] = useState(hrState());
+  useEffect(() => subscribeHr(setS), []);
+  return s;
+}
+
+/** Puls im Kopf des Trainings: verbinden, aktueller Wert in Zonenfarbe, Neuverbinden nach Abbruch. */
+function HrBadge({ hr }) {
+  const [busy, setBusy] = useState(false);
+  async function connect() {
+    if (!hrSupported()) { toast(hrUnsupportedReason(), "error"); return; }
+    setBusy(true);
+    try { await connectHr(); } catch (e) { toast(e.message, "error"); } finally { setBusy(false); }
+  }
+  if (hr.status === "connected" && hr.bpm) {
+    const z = zoneOf(hr.bpm, 190);
+    return (
+      <button type="button" className="hr-badge live" style={{ "--c": z >= 0 ? ZONES[z].color : "var(--c-heart)" }}
+        onClick={async () => { if (await confirmDialog(`Pulsmesser „${hr.device}“ trennen?`, { confirmLabel: "Trennen" })) disconnectHr(); }}
+        title={hr.device}>
+        <small>Puls</small><span><i className="hr-heart" />{hr.bpm}</span>
+      </button>
+    );
+  }
+  const label = hr.status === "connecting" || busy ? "verbinde …" : hr.status === "reconnecting" ? "verbinde neu …" : hr.status === "lost" ? "getrennt" : "verbinden";
+  return (
+    <button type="button" className="hr-badge" onClick={connect} disabled={busy || hr.status === "connecting"}
+      title="WHOOP: in der WHOOP-App „Heart Rate Broadcast“ einschalten. Oder Brustgurt / Uhr im Sendemodus.">
+      <small>Puls</small><span>❤ {label}</span>
+    </button>
+  );
+}
+
 function FinishDialog({ w, stats, elapsed, onClose, onSaved }) {
   const [name, setName] = useState(w.name || "Training");
   const [notes, setNotes] = useState(w.notes || "");
@@ -160,7 +232,7 @@ function FinishDialog({ w, stats, elapsed, onClose, onSaved }) {
     try {
       const start = new Date(w.start);
       const body = {
-        name, notes, start: w.start, routine_id: w.routine_id,
+        name, notes, start: w.start, routine_id: w.routine_id, hr: w.hr || null,
         end: new Date(start.getTime() + Math.max(1, duration) * 60000).toISOString(),
         exercises: w.exercises.map((b) => {
           const out = fromDraftBlock(b);
