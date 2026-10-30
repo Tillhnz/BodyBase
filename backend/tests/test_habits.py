@@ -12,16 +12,17 @@ def test_target_grows_each_monday():
 
 
 def test_habit_flow_and_body_map(client, auth):
+    from app.timeutil import today as app_today  # Kalendertag in der Zeitzone der App, nicht des Testrechners
     exs = client.get("/api/strength/exercises", headers=auth).json()
     push_up = next(e for e in exs if e["name"] == "Liegestütze")
-    start = (date.today() - timedelta(days=9)).isoformat()
+    start = (app_today() - timedelta(days=9)).isoformat()
     r = client.post("/api/habits", json={"name": "Liegestütze", "target": 20, "increment": 5, "exercise_id": push_up["id"],
                                          "start": start}, headers=auth)
     assert r.status_code == 201, r.text
     h = r.json()
     assert h["unit"] == "Wdh."
     for i in range(9, 0, -1):
-        d = (date.today() - timedelta(days=i)).isoformat()
+        d = (app_today() - timedelta(days=i)).isoformat()
         client.post(f"/api/habits/{h['id']}/log", json={"day": d, "value": 60}, headers=auth)
     h = client.post(f"/api/habits/{h['id']}/log", json={"add": 10}, headers=auth).json()
     assert h["today"]["value"] == 10 and not h["today"]["done"]

@@ -1,9 +1,16 @@
 import io
 import json
 import zipfile
-from datetime import date, timedelta
+from datetime import timedelta
 
 from conftest import register
+
+
+def _app_today():
+    """Kalendertag in der Zeitzone der App (nicht des Testrechners)."""
+    from app.timeutil import today
+    return today()
+
 
 
 def test_health(client):
@@ -44,7 +51,7 @@ def test_first_user_is_admin(client, auth):
 
 def test_manual_entries_and_series(client, auth):
     for i, v in enumerate([81.2, 80.8, 80.5]):
-        day = (date.today() - timedelta(days=2 - i)).isoformat()
+        day = (_app_today() - timedelta(days=2 - i)).isoformat()
         r = client.post("/api/entries", json={"metric": "weight", "value": v, "time": f"{day}T07:30:00"}, headers=auth)
         assert r.status_code == 201, r.text
     r = client.post("/api/entries", json={"metric": "weight", "value": 900}, headers=auth)
@@ -104,7 +111,7 @@ def test_ingest_health_auto_export(client):
     info = client.get("/api/me/ingest", headers=headers).json()
     token = info["token"]
     assert token.startswith("bb_")
-    today = date.today().isoformat()
+    today = _app_today().isoformat()
     payload = {"data": {"metrics": [
         {"name": "step_count", "units": "count", "data": [{"date": f"{today} 00:00:00 +0100", "qty": 7345}]},
         {"name": "weight_body_mass", "units": "lb", "data": [{"date": f"{today} 07:00:00 +0100", "qty": 176.4}]},

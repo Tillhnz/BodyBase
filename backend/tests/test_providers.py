@@ -1,6 +1,6 @@
 """Anbieter mit nachgebildeten API-Antworten: prüft Abfragen, Umrechnungen und das Speichern."""
 import json
-from datetime import date, timedelta
+from datetime import timedelta
 
 import httpx
 from sqlalchemy import select
@@ -10,7 +10,14 @@ from conftest import make_ctx
 from app import providers
 from app.models import Activity, Sample, SleepSession
 
-TODAY = date.today()
+
+def _app_today():
+    """Kalendertag in der Zeitzone der App (nicht des Testrechners)."""
+    from app.timeutil import today
+    return today()
+
+
+TODAY = _app_today()
 D1 = (TODAY - timedelta(days=1)).isoformat()
 
 
