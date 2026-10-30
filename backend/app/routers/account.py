@@ -232,6 +232,8 @@ def delete_account(data: DeleteAccountIn, request: Request, user: User = Depends
     from ..strength import purge_user
     purge_user(db, user.id)
     purge_habits(db, user.id)
+    from ..models import ApiKey
+    db.execute(delete(ApiKey).where(ApiKey.user_id == user.id))
     db.delete(user)
     db.commit()
     audit.record(db, email, "account.delete", "Konto gelöscht")

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
+import ApiKeys from "../components/ApiKeys.jsx";
 import { toast } from "../components/feedback.jsx";
 import { Segmented, useAsync } from "../components/ui.jsx";
 import { fmtNum } from "../fmt.js";
@@ -236,6 +237,7 @@ export default function Settings({ user, onChange }) {
         </div>
         <div>
           <HomeCards user={user} onChange={onChange} />
+          <ApiKeys />
           <Account />
         </div>
       </div>

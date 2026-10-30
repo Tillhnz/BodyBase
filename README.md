@@ -82,6 +82,18 @@ bodybase url https://body.deine-domain.de
 
 Im Proxy Host unter *Advanced* für große Apple-Health-Exporte am besten `client_max_body_size 0;` eintragen.
 
+## API
+
+BodyBase hat eine dokumentierte Schnittstelle für eigene Programme (Home Assistant, Skripte, Auswertungen).
+Unter **Einstellungen → API** persönliche Schlüssel erzeugen (nur lesen oder lesen & schreiben, optional mit Ablaufdatum)
+und als `Authorization: Bearer bbk_…` oder `X-API-Key: bbk_…` mitschicken. Konto, Passwort, Schlüssel und
+Administration sind mit Schlüsseln gesperrt. Die Dokumentation mit Beispielen und „Ausprobieren“ steht in der App unter
+`/api-docs`, die OpenAPI-Beschreibung unter `/api/openapi.json`.
+
+```bash
+curl -H "Authorization: Bearer $BODYBASE_KEY" "https://body.example.de/api/metrics/weight?days=30"
+```
+
 ## Von Hevy umziehen
 
 Hevy gibt seine API nur mit Pro frei. Ohne Pro: In Hevy unter *Profil → Einstellungen → Daten exportieren* die `workouts.csv` erzeugen und in BodyBase unter **Kraft → Importieren** hochladen. Übungen werden automatisch zugeordnet (auch englische Namen), unbekannte als eigene Übungen angelegt. Ein erneuter Import aktualisiert statt zu verdoppeln. Der Export aus Strong funktioniert genauso.

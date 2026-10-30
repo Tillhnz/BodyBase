@@ -189,6 +189,12 @@ def _ingest_user(request: Request, db: Session) -> User:
         token = auth[7:].strip()
     token = token or request.headers.get("x-api-key") or request.headers.get("api-key") or request.query_params.get("token")
     user = user_from_ingest_token(db, token)
+    if user is None and token and token.startswith("bbk_"):
+        from ..models import ApiKey
+        from ..security import hash_api_key
+        key = db.scalar(select(ApiKey).where(ApiKey.key_hash == hash_api_key(token)))
+        if key is not None and key.scope == "write":
+            user = db.get(User, key.user_id)
     if user is None:
         raise HTTPException(401, "Ungültiger oder fehlender Schlüssel. Du findest ihn in BodyBase unter Quellen.")
     return user

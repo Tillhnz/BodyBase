@@ -82,6 +82,8 @@ def delete_user(user_id: int, admin: User = Depends(require_admin), db: Session 
     from ..strength import purge_user
     purge_user(db, u.id)
     purge_habits(db, u.id)
+    from ..models import ApiKey
+    db.execute(delete(ApiKey).where(ApiKey.user_id == u.id))
     db.delete(u)
     db.commit()
     audit.record(db, admin.email, "user.delete", email)

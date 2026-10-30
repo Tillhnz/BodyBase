@@ -777,3 +777,23 @@ details > summary { list-style-position: inside; }
   .habit-days .habit-day:nth-child(-n + 14) { display: none; }
 }
 .home-habits { margin-bottom: 1.25rem; }
+
+/* ---------- API-Dokumentation ---------- */
+
+.api-example { margin-bottom: 0.9rem; }
+.api-example pre, .api-result { margin: 0.3rem 0 0; padding: 0.7rem 0.85rem; border-radius: 10px; background: var(--ink-2); border: 1px solid var(--line); overflow-x: auto; font-size: 0.8rem; line-height: 1.45; }
+.api-result { max-height: 360px; overflow: auto; }
+.api-result.bad { color: var(--signal); }
+.api-group h3 { margin: 1.2rem 0 0.5rem; font-size: 1.15rem; }
+.api-ep { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 0.4rem; background: var(--ink-2); }
+.api-ep-head { font: inherit; color: var(--chalk); display: flex; align-items: center; gap: 0.7rem; width: 100%; padding: 0.5rem 0.7rem; background: none; border: 0; cursor: pointer; text-align: left; flex-wrap: wrap; }
+.api-ep-head code { font-size: 0.86rem; }
+.api-sum { margin-left: auto; }
+.api-ep-body { padding: 0 0.8rem 0.8rem; }
+.api-method { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; padding: 0.12rem 0.45rem; border-radius: 6px; min-width: 52px; text-align: center; }
+.api-method.m-get { background: color-mix(in srgb, var(--c-body) 22%, transparent); color: var(--c-body); }
+.api-method.m-post { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good); }
+.api-method.m-put, .api-method.m-patch { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.api-method.m-delete { background: color-mix(in srgb, var(--signal) 22%, transparent); color: var(--signal); }
+.api-input { padding: 0.25rem 0.45rem; font-size: 0.85rem; }
+.steps { padding-left: 1.2rem; display: grid; gap: 0.4rem; }

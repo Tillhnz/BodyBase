@@ -325,3 +325,18 @@ class HabitLog(Base):
     day: Mapped[date] = mapped_column(Date)
     value: Mapped[float] = mapped_column(Float, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ApiKey(Base):
+    """Persönlicher API-Schlüssel für andere Programme (Home Assistant, Skripte, Auswertungen)."""
+    __tablename__ = "api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    prefix: Mapped[str] = mapped_column(String(16))  # zum Wiedererkennen, z. B. "bbk_a1b2"
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    scope: Mapped[str] = mapped_column(String(10), default="read")  # read | write
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

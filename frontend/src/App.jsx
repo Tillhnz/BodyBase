@@ -16,6 +16,7 @@ import Sources from "./pages/Sources.jsx";
 import Trends from "./pages/Trends.jsx";
 import Strength from "./strength/Strength.jsx";
 import Habits from "./habits/Habits.jsx";
+import ApiDocs from "./pages/ApiDocs.jsx";
 import StrengthLog from "./strength/StrengthLog.jsx";
 import WorkoutDetail from "./strength/WorkoutDetail.jsx";
 import RoutineEditor from "./strength/RoutineEditor.jsx";
@@ -75,6 +76,7 @@ export default function App() {
             <Route path="/activities/:id" element={<ActivityDetail />} />
             <Route path="/strength" element={<Strength />} />
             <Route path="/habits" element={<Habits />} />
+            <Route path="/api-docs" element={<ApiDocs />} />
             <Route path="/strength/log" element={<StrengthLog />} />
             <Route path="/strength/workout/:id" element={<WorkoutDetail />} />
             <Route path="/strength/routine/:id" element={<RoutineEditor />} />
