@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import strength as S
 from ..database import get_db
-from ..models import ActiveWorkout, Exercise, Routine, User, Workout, WorkoutSet
+from ..models import ActiveWorkout, Exercise, ImportJob, Routine, User, Workout, WorkoutSet
 from ..security import current_user
 from ..strength_catalog import EQUIPMENT, KINDS, MUSCLE_GROUPS, MUSCLES
 from ..timeutil import parse_iso, today, utcnow
@@ -293,3 +293,99 @@ async def import_file(file: UploadFile = File(...), user: User = Depends(current
         return S.import_csv(db, user, raw)
     except S.StrengthError as e:
         _bad(e)
+
+
+# Hochladen in Stücken: Der Nginx Proxy Manager lässt ohne Anpassung nur 1 MB pro Anfrage durch und bricht
+# größere Uploads mittendrin ab („Failed to fetch“). Das Einlesen läuft danach im Hintergrund, damit auch
+# lange Importe nicht an der Wartezeit des Proxys scheitern.
+
+CHUNK_MAX = 900 * 1024
+UPLOAD_MAX = 60 * 1024 * 1024
+
+
+def _part_path(user_id: int, upload_id: str) -> str:
+    import os
+    import re
+    from ..config import settings
+    if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", upload_id or ""):
+        raise HTTPException(422, "Ungültige Upload-Kennung.")
+    folder = os.path.join(settings.data_dir, "uploads")
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, f"strength-{user_id}-{upload_id}.part")
+
+
+def _run_import(job_id: int, user_id: int, path: str) -> None:
+    import gzip
+    import logging
+    import os
+    from ..database import SessionLocal
+    log = logging.getLogger("bodybase.strength")
+    with SessionLocal() as db:
+        job = db.get(ImportJob, job_id)
+        try:
+            with open(path, "rb") as f:
+                raw = f.read()
+            if raw[:2] == b"\x1f\x8b":
+                raw = gzip.decompress(raw)
+            user = db.get(User, user_id)
+            job.status, job.progress = "running", 0.1
+            db.commit()
+            result = S.import_csv(db, user, raw)
+            job = db.get(ImportJob, job_id)
+            job.status, job.progress, job.counts, job.finished_at = "done", 1.0, result, utcnow()
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            if not isinstance(e, (S.StrengthError, OSError)):
+                log.exception("Krafttraining-Import fehlgeschlagen")
+            job = db.get(ImportJob, job_id)
+            job.status, job.message, job.finished_at = "failed", str(e)[:500] or type(e).__name__, utcnow()
+            db.commit()
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
+@router.post("/import/chunk")
+async def import_chunk(request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    import os
+    import threading
+    h = request.headers
+    try:
+        index, total = int(h.get("x-chunk-index", "")), int(h.get("x-chunk-total", ""))
+    except ValueError:
+        raise HTTPException(422, "Angaben zum Teilstück fehlen.")
+    if not (0 <= index < total <= 200):
+        raise HTTPException(422, "Ungültiges Teilstück.")
+    path = _part_path(user.id, h.get("x-upload-id", ""))
+    body = await request.body()
+    if len(body) > CHUNK_MAX + 1024:
+        raise HTTPException(413, "Teilstück zu groß.")
+    if index == 0 and os.path.exists(path):
+        os.remove(path)
+    if index > 0 and not os.path.exists(path):
+        raise HTTPException(409, "Upload unterbrochen. Bitte die Datei erneut wählen.")
+    with open(path, "ab") as f:
+        f.write(body)
+    if os.path.getsize(path) > UPLOAD_MAX:
+        os.remove(path)
+        raise HTTPException(413, "Die Datei ist zu groß (höchstens 60 MB).")
+    if index < total - 1:
+        return {"received": index + 1, "total": total}
+    from urllib.parse import unquote
+    job = ImportJob(user_id=user.id, kind="strength", filename=unquote(h.get("x-filename", "workouts.csv"))[:200],
+                    status="queued", progress=0.0)
+    db.add(job)
+    db.commit()
+    threading.Thread(target=_run_import, args=(job.id, user.id, path), daemon=True).start()
+    return {"job_id": job.id}
+
+
+@router.get("/import/{job_id}")
+def import_status(job_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    job = db.get(ImportJob, job_id)
+    if not job or job.user_id != user.id:
+        raise HTTPException(404, "Import nicht gefunden")
+    return {"status": job.status, "progress": job.progress, "message": job.message, "result": job.counts}

@@ -167,3 +167,28 @@ def test_import_german_hevy_and_errors(client, auth):
         z.writestr("workouts.csv", HEVY_CSV.replace("Pull", "Zip Pull"))
     r = client.post("/api/strength/import", files={"file": ("export.zip", buf.getvalue(), "application/zip")}, headers=auth)
     assert r.status_code == 200 and r.json()["created"] == 1, r.text
+
+
+def test_chunked_gzip_import(client, auth):
+    import gzip
+    import time
+    data = gzip.compress(HEVY_CSV.replace("Pull", "Chunk Pull").encode())
+    half = len(data) // 2
+    parts = [data[:half], data[half:]]
+    res = None
+    for i, part in enumerate(parts):
+        r = client.post("/api/strength/import/chunk", content=part, headers={
+            **auth, "X-Upload-Id": "testupload01", "X-Chunk-Index": str(i), "X-Chunk-Total": "2"})
+        assert r.status_code == 200, r.text
+        res = r.json()
+    job = res["job_id"]
+    for _ in range(100):
+        st = client.get(f"/api/strength/import/{job}", headers=auth).json()
+        if st["status"] in ("done", "failed"):
+            break
+        time.sleep(0.1)
+    assert st["status"] == "done", st
+    assert st["result"]["created"] == 1
+    bad = client.post("/api/strength/import/chunk", content=b"x", headers={
+        **auth, "X-Upload-Id": "../../etc", "X-Chunk-Index": "0", "X-Chunk-Total": "1"})
+    assert bad.status_code == 422

@@ -98,6 +98,47 @@ export default function Strength() {
   );
 }
 
+const CHUNK = 768 * 1024;
+
+/** Datei komprimieren und in kleinen Stücken senden (Proxys lassen oft nur 1 MB pro Anfrage zu), dann auf das Ergebnis warten. */
+async function uploadImport(file, report) {
+  let data = new Uint8Array(await file.arrayBuffer());
+  const zipped = data[0] === 0x50 && data[1] === 0x4b;
+  if (!zipped && typeof CompressionStream !== "undefined") {
+    try {
+      const stream = new Blob([data]).stream().pipeThrough(new CompressionStream("gzip"));
+      data = new Uint8Array(await new Response(stream).arrayBuffer());
+    } catch { /* ohne Komprimierung weiter */ }
+  }
+  const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  const total = Math.max(1, Math.ceil(data.length / CHUNK));
+  let res = null;
+  for (let i = 0; i < total; i++) {
+    report(total > 1 ? `Lade hoch … ${Math.round((i / total) * 100)} %` : "Lade hoch …");
+    let attempt = 0;
+    for (;;) {
+      const r = await fetch("/api/strength/import/chunk", {
+        method: "POST", credentials: "same-origin", body: data.slice(i * CHUNK, (i + 1) * CHUNK),
+        headers: { "X-BB-Request": "1", "Content-Type": "application/octet-stream", "X-Upload-Id": id, "X-Chunk-Index": String(i),
+          "X-Chunk-Total": String(total), "X-Filename": encodeURIComponent(file.name).slice(0, 200) },
+      }).catch((e) => ({ ok: false, status: 0, error: e }));
+      if (r.ok) { res = await r.json(); break; }
+      if (r.status === 0 && attempt++ < 2) continue; // kurzer Funkaussetzer
+      let msg = r.status === 413 ? "Der Proxy vor BodyBase lehnt die Datei ab (zu groß)." : r.status ? `Fehler ${r.status}` : "Verbindung abgebrochen.";
+      try { const j = await r.json(); if (typeof j.detail === "string") msg = j.detail; } catch { /* keine JSON-Antwort */ }
+      throw new Error(msg);
+    }
+  }
+  report("Lese Trainings ein …");
+  for (let n = 0; n < 900; n++) {
+    await new Promise((ok) => setTimeout(ok, n < 5 ? 600 : 1500));
+    const st = await api.get(`/strength/import/${res.job_id}`);
+    if (st.status === "done") return st.result;
+    if (st.status === "failed") throw new Error(st.message || "Import fehlgeschlagen");
+  }
+  throw new Error("Der Import dauert ungewöhnlich lange. Schau später unter Verlauf nach.");
+}
+
 function ImportButton({ onDone }) {
   const ref = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -107,14 +148,12 @@ function ImportButton({ onDone }) {
     if (!f) return;
     setBusy(true);
     try {
-      const form = new FormData();
-      form.append("file", f);
-      const r = await api.upload("/strength/import", form);
+      const r = await uploadImport(f, setBusy);
       await loadExercises(true);
-      toast(`${r.source === "hevy" ? "Hevy" : "Strong"}: ${r.created} neue, ${r.updated} aktualisierte Trainings${r.new_exercises ? `, ${r.new_exercises} neue Übungen` : ""}`);
+      toast(`${r.source === "hevy" ? "Hevy" : "Strong"}: ${r.created} neue, ${r.updated} aktualisierte Trainings${r.new_exercises ? `, ${r.new_exercises} neue Übungen` : ""}${r.skipped ? `, ${r.skipped} übersprungen` : ""}`);
       onDone?.();
     } catch (err) {
-      toast(err.message, "error");
+      toast(err.message === "Failed to fetch" ? "Verbindung abgebrochen. Bitte erneut versuchen." : err.message, "error");
     } finally {
       setBusy(false);
     }
@@ -122,7 +161,7 @@ function ImportButton({ onDone }) {
   return (
     <>
       <button className="btn" onClick={() => ref.current?.click()} disabled={busy} title="CSV-Export aus Hevy (Einstellungen → Daten exportieren) oder Strong">
-        {busy ? "Importiere …" : "Importieren"}
+        {busy ? (typeof busy === "string" ? busy : "Importiere …") : "Importieren"}
       </button>
       <input ref={ref} type="file" accept=".csv,.zip,.txt,text/csv,text/comma-separated-values,text/plain,application/vnd.ms-excel,application/zip" hidden onChange={onFile} />
     </>
