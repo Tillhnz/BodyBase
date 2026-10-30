@@ -728,3 +728,51 @@ details > summary { list-style-position: inside; }
 .hr-chart { margin: 0.4rem 0 0.6rem; }
 .hr-head { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
 .hr-mark { stroke: var(--chalk); stroke-width: 1.5; opacity: 0.55; }
+
+/* ---------- Gewohnheiten ---------- */
+
+.habit-row { display: flex; align-items: center; gap: 1rem; padding: 0.7rem 0; border-bottom: 1px solid var(--line); }
+.habits-today .habit-row:last-child, .habit-card .habit-row { border-bottom: 0; }
+.habit-row.rest { opacity: 0.6; }
+.habit-main { flex: 1; min-width: 0; display: grid; gap: 0.3rem; }
+.habit-top { display: flex; align-items: baseline; gap: 0.6rem; }
+.habit-name { color: var(--chalk); font-weight: 600; text-decoration: none; }
+.habit-row.done .habit-name::after { content: " ✓"; color: var(--c); }
+.habit-streak { font-size: 0.82rem; color: var(--warn); font-weight: 600; }
+.habit-bar { height: 8px; border-radius: 999px; background: var(--ink-2); overflow: hidden; }
+.habit-bar i { display: block; height: 100%; background: var(--c); border-radius: 999px; transition: width 0.4s cubic-bezier(.2,.8,.2,1); }
+.habit-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; justify-content: flex-end; }
+.habit-actions .btn { min-width: 42px; }
+.habit-card { border-left: 3px solid var(--c); }
+.habit-stats { display: flex; flex-wrap: wrap; gap: 1.4rem; margin: 0.4rem 0 0.8rem; }
+.habit-stats span { display: flex; flex-direction: column; }
+.habit-stats b { font-family: var(--font-display); font-size: 1.35rem; line-height: 1.1; }
+.habit-stats b.small { font-family: var(--font-body); font-size: 0.9rem; }
+.habit-stats small { font-size: 0.74rem; color: var(--mute); }
+.habit-days { display: grid; grid-template-columns: repeat(28, minmax(0, 1fr)); gap: 3px; align-items: end; }
+.habit-day { position: relative; font: inherit; height: 46px; border: 0; padding: 0; border-radius: 5px; background: var(--ink-2); cursor: pointer; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
+.habit-day i { position: absolute; left: 0; right: 0; bottom: 0; background: color-mix(in srgb, var(--c) 45%, transparent); }
+.habit-day.done i, .habit-day.done { background: var(--c); }
+.habit-day.done i { background: transparent; }
+.habit-day em { position: absolute; left: 0; right: 0; height: 2px; background: var(--chalk); opacity: 0.35; }
+.habit-day span { position: relative; font-size: 0.55rem; color: var(--mute); margin-bottom: 2px; }
+.habit-day.done span { color: var(--ink); }
+.habit-day.off { opacity: 0.45; }
+.habit-day.today { outline: 1.5px solid var(--chalk); outline-offset: 1px; }
+.color-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
+.color-dot.on { border-color: var(--chalk); }
+
+/* ---------- Coach ---------- */
+
+.coach-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.coach-item { display: flex; gap: 0.8rem; align-items: flex-start; }
+.coach-item p { margin: 0.15rem 0 0.4rem; color: var(--mute); font-size: 0.9rem; }
+.coach-icon { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 0.85rem; }
+.coach-item.warn .coach-icon { background: color-mix(in srgb, var(--signal) 18%, transparent); color: var(--signal); }
+.coach-item.tip .coach-icon { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.coach-item.good .coach-icon { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.coach .chips .chip { text-decoration: none; }
+@media (max-width: 800px) {
+  .habit-days { grid-template-columns: repeat(14, minmax(0, 1fr)); }
+  .habit-days .habit-day:nth-child(-n + 14) { display: none; }
+}

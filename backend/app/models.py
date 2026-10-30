@@ -290,3 +290,38 @@ class HeartRateRaw(Base):
     source: Mapped[str] = mapped_column(String(40))
     ts: Mapped[datetime] = mapped_column(DateTime)
     bpm: Mapped[float] = mapped_column(Float)
+
+
+# ---------- Gewohnheiten ----------
+
+class Habit(Base):
+    """Tägliche Gewohnheit, z. B. Liegestütze mit Ziel, das jeden Montag steigt."""
+    __tablename__ = "habits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(20), default="count")  # count (Zahl erreichen) | check (erledigt ja/nein)
+    exercise_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # zählt dann für die Körperkarte
+    unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    target: Mapped[float | None] = mapped_column(Float, nullable=True)  # Ziel in der Startwoche
+    increment: Mapped[float | None] = mapped_column(Float, nullable=True)  # Erhöhung je Woche (Montag)
+    max_target: Mapped[float | None] = mapped_column(Float, nullable=True)
+    start: Mapped[date] = mapped_column(Date)
+    weekdays: Mapped[list | None] = mapped_column(JSON, nullable=True)  # 0=Mo … 6=So, leer = täglich
+    color: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    archived: Mapped[bool | None] = mapped_column(Boolean, default=False, nullable=True)
+    position: Mapped[int | None] = mapped_column(Integer, default=0, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class HabitLog(Base):
+    __tablename__ = "habit_logs"
+    __table_args__ = (UniqueConstraint("habit_id", "day", name="uq_habit_day"), Index("ix_habit_logs_user_day", "user_id", "day"))
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    habit_id: Mapped[int] = mapped_column(ForeignKey("habits.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(Integer)
+    day: Mapped[date] = mapped_column(Date)
+    value: Mapped[float] = mapped_column(Float, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

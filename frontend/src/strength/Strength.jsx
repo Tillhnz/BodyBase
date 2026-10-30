@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import BodyMap from "../components/BodyMap.jsx";
+import Coach from "../components/Coach.jsx";
 import { Calendar, useWidth } from "../components/charts.jsx";
 import { confirmDialog, Loading, toast } from "../components/feedback.jsx";
 import { Delta, EmptyState, Kpi, Segmented, useAsync } from "../components/ui.jsx";
@@ -47,6 +48,7 @@ export default function Strength() {
         <div className="actions">
           <ImportButton onDone={reload} />
           <Link className="btn" to="/strength/exercises">Übungen</Link>
+          <Link className="btn" to="/habits">Gewohnheiten</Link>
           {active?.exercises
             ? <Link className="btn primary" to="/strength/log">Training fortsetzen</Link>
             : <button className="btn primary" onClick={() => startWorkout(navigate, {})}>Leeres Training starten</button>}
@@ -61,6 +63,8 @@ export default function Strength() {
           <span className="link">Weiter →</span>
         </Link>
       )}
+
+      <Coach />
 
       <section className="panel">
         <div className="panel-head">

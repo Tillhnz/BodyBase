@@ -78,8 +78,10 @@ def delete_user(user_id: int, admin: User = Depends(require_admin), db: Session 
     email = u.email
     for model in (Sample, SleepSession, Activity):
         db.execute(delete(model).where(model.user_id == u.id))
+    from ..habits import purge_user as purge_habits
     from ..strength import purge_user
     purge_user(db, u.id)
+    purge_habits(db, u.id)
     db.delete(u)
     db.commit()
     audit.record(db, admin.email, "user.delete", email)

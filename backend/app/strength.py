@@ -620,6 +620,8 @@ def body_load(db: Session, user_id: int, days: int, today_: date) -> dict:
             for m in e.secondary or []:
                 if m in MUSCLES and m not in ("cardio", "full_body", "other"):
                     strength[m] += 0.5
+    from . import habits as H
+    habit_load, habit_info = H.muscle_load(db, user_id, start)
     sources: dict[str, dict] = {}
     acts = db.scalars(select(Activity).where(Activity.user_id == user_id, Activity.day >= start,
                                              Activity.duplicate_of.is_(None), Activity.source.not_in([SOURCE, "hevy"])))
@@ -637,12 +639,13 @@ def body_load(db: Session, user_id: int, days: int, today_: date) -> dict:
     for m in MUSCLES:
         if m in ("cardio", "full_body", "other"):
             continue
-        v = strength.get(m, 0) + other.get(m, 0)
+        v = strength.get(m, 0) + other.get(m, 0) + habit_load.get(m, 0)
         muscles.append({"muscle": m, "label": MUSCLES[m], "group": MUSCLE_GROUPS.get(m), "value": round(v, 1),
-                        "strength": round(strength.get(m, 0), 1), "sports": round(other.get(m, 0), 1)})
+                        "strength": round(strength.get(m, 0), 1), "sports": round(other.get(m, 0), 1),
+                        "habits": round(habit_load.get(m, 0), 1)})
     muscles.sort(key=lambda x: -x["value"])
     return {"days": days, "muscles": muscles, "sources": sorted(sources.values(), key=lambda x: -x["minutes"]),
-            "strength": {"workouts": len(wids), "sets": sets_total}}
+            "strength": {"workouts": len(wids), "sets": sets_total}, "habits": habit_info}
 
 
 # ---------- Routinen ----------

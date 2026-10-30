@@ -228,8 +228,10 @@ def delete_account(data: DeleteAccountIn, request: Request, user: User = Depends
     email = user.email
     for model in (Sample, SleepSession, Activity):
         db.execute(delete(model).where(model.user_id == user.id))
+    from ..habits import purge_user as purge_habits
     from ..strength import purge_user
     purge_user(db, user.id)
+    purge_habits(db, user.id)
     db.delete(user)
     db.commit()
     audit.record(db, email, "account.delete", "Konto gelöscht")

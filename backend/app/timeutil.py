@@ -83,3 +83,7 @@ def parse_date(value) -> date | None:
         return date.fromisoformat(str(value)[:10])
     except ValueError:
         return None
+
+
+def local_hour_now() -> int:
+    return datetime.now(tz()).hour

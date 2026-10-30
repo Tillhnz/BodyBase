@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import BodyMap from "../components/BodyMap.jsx";
+import Coach from "../components/Coach.jsx";
+import HabitsToday from "../habits/HabitsToday.jsx";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { KernRings, StageBar } from "../components/charts.jsx";
@@ -25,6 +27,7 @@ function readinessText(v) {
 }
 
 export default function Home({ user }) {
+  const [tick, setTick] = useState(0);
   const navigate = useNavigate();
   const [{ data, loading, error }] = useAsync(() => api.get("/dashboard"), []);
   const keys = (user.prefs?.home?.length ? user.prefs.home : null)?.join(",") || "";
@@ -162,7 +165,12 @@ export default function Home({ user }) {
         {(summary || []).map((item) => <MetricCard key={item.key} item={item} to={`/metric/${item.key}`} />)}
       </div>
 
-      <BodyLoadPanel />
+      <div className="grid-2">
+        <HabitsToday onChanged={() => setTick((n) => n + 1)} />
+        <Coach refreshKey={tick} compact />
+      </div>
+
+      <BodyLoadPanel refreshKey={tick} />
 
       <div className="grid-2">
         <section className="panel cat-activity">
@@ -228,23 +236,24 @@ function relWhen(iso) {
 const LOAD_RANGES = [{ value: 7, label: "7 Tage" }, { value: 30, label: "30 Tage" }, { value: 90, label: "90 Tage" }, { value: 365, label: "1 Jahr" }];
 
 /** Welche Körperregionen im Zeitraum beansprucht wurden: Krafttraining plus Rad, Laufen, Klettern & Co. */
-function BodyLoadPanel() {
+function BodyLoadPanel({ refreshKey }) {
   const [days, setDays] = useState(() => { try { return Number(localStorage.getItem("bodybase-load-days")) || 30; } catch { return 30; } });
   const [data, setData] = useState(null);
   useEffect(() => {
     try { localStorage.setItem("bodybase-load-days", String(days)); } catch { /* privat */ }
     api.get(`/strength/body-load?days=${days}`).then(setData).catch(() => setData(null));
-  }, [days]);
+  }, [days, refreshKey]);
   const values = {};
   const detail = {};
   for (const m of data?.muscles || []) {
     if (m.value > 0) {
       values[m.muscle] = m.value;
       detail[m.muscle] = [m.strength ? `Kraft ${fmtNum(m.strength, m.strength % 1 ? 1 : 0)}` : null,
-        m.sports ? `Ausdauer & Sport ${fmtNum(m.sports, m.sports % 1 ? 1 : 0)}` : null].filter(Boolean).join(" · ");
+        m.sports ? `Ausdauer & Sport ${fmtNum(m.sports, m.sports % 1 ? 1 : 0)}` : null,
+        m.habits ? `Gewohnheiten ${fmtNum(m.habits, m.habits % 1 ? 1 : 0)}` : null].filter(Boolean).join(" · ");
     }
   }
-  const empty = data && !data.strength.sets && !data.sources.length;
+  const empty = data && !data.strength.sets && !data.sources.length && !data.habits?.length;
   return (
     <section className="panel cat-activity">
       <div className="panel-head">
@@ -259,6 +268,7 @@ function BodyLoadPanel() {
           <div className="load-sources">
             {data.strength.sets > 0 && <span className="pill"><b>Kraft</b> {data.strength.workouts} Trainings · {data.strength.sets} Sätze</span>}
             {data.sources.map((s) => <span key={s.sport} className="pill"><b>{s.label}</b> {fmtMinutes(s.minutes)}</span>)}
+            {(data.habits || []).map((h) => <span key={h.habit} className="pill"><b>{h.habit}</b> {fmtNum(h.total)} {h.unit || ""}</span>)}
           </div>
           <p className="hint">Ein Punkt entspricht etwa einem Arbeitssatz. Ausdauer zählt je 10 Minuten anteilig für die beteiligten Muskeln, beim Radfahren also vor allem Oberschenkel, Gesäß und Waden, beim Klettern Unterarme, Rücken und Bizeps.</p>
         </>
