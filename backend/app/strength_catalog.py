@@ -151,3 +151,68 @@ CATALOG = [
     {"key": k, "name": n, "equipment": eq, "primary": p, "secondary": s, "kind": kind, "aliases": al}
     for k, n, eq, p, s, kind, al in _C
 ]
+
+
+# ---------- Muskeln für unbekannte Übungen erraten (Importe aus Hevy/Strong, eigene Namen) ----------
+# Reihenfolge zählt: spezifische Begriffe vor allgemeinen ("leg curl" vor "curl", "rowing machine" vor "row").
+GUESS_RULES: list[tuple[tuple[str, ...], str, list[str]]] = [
+    (("rowing machine", "ruderger", "ergometer", "treadmill", "laufband", "elliptical", "crosstrainer", "stair", "stepper",
+      "jump rope", "seilspring", "cycling", "spinning", "stationary bike", "assault bike", "air bike", "cardio", "sprint",
+      "running", "joggen", "swim"), "cardio", []),
+    (("burpee", "clean", "snatch", "thruster", "jerk", "turkish", "man maker", "bear crawl", "sled"), "full_body", ["quads", "shoulders"]),
+    (("hip thrust", "glute bridge", "glute", "gesäß", "kickback (cable)", "donkey kick", "frog pump"), "glutes", ["hamstrings"]),
+    (("abduct", "abdukt", "clamshell", "fire hydrant"), "abductors", ["glutes"]),
+    (("adduct", "addukt", "copenhagen"), "adductors", []),
+    (("calf", "wade", "waden"), "calves", []),
+    (("leg curl", "beinbeuger", "nordic", "hamstring", "glute ham"), "hamstrings", []),
+    (("romanian", "rumän", "rdl", "stiff leg", "stiff-leg", "good morning", "single leg deadlift"), "hamstrings", ["glutes", "lower_back"]),
+    (("deadlift", "kreuzheben", "rack pull"), "lower_back", ["glutes", "hamstrings", "traps"]),
+    (("back extension", "hyperext", "rückenstreck", "superman", "reverse hyper"), "lower_back", ["glutes"]),
+    (("squat", "kniebeug", "leg press", "beinpresse", "lunge", "ausfall", "split squat", "step up", "step-up", "leg extension",
+      "beinstreck", "hack", "pistol", "wall sit", "sissy", "belt squat", "box jump", "jump squat"), "quads", ["glutes"]),
+    (("skull", "tricep", "trizeps", "pushdown", "push down", "french press", "kickback", "close grip bench", "enges bank",
+      "diamond push"), "triceps", []),
+    (("dip",), "chest", ["triceps", "shoulders"]),
+    (("bench", "bankdr", "chest", "brust", "push up", "push-up", "pushup", "liegest", "fly", "flies", "flys", "pec ", "pec deck",
+      "butterfly", "crossover", "svend"), "chest", ["triceps", "shoulders"]),
+    (("wrist", "handgelenk", "handgrip", "grip trainer", "grip strength", "farmer", "unterarm", "forearm", "reverse curl", "dead hang"), "forearms", []),
+    (("hammer curl",), "biceps", ["forearms"]),
+    (("curl", "bizeps", "bicep"), "biceps", ["forearms"]),
+    (("shrug",), "traps", []),
+    (("face pull", "rear delt", "reverse fly", "reverse pec", "reverse butterfly"), "shoulders", ["upper_back"]),
+    (("lateral raise", "seitheb", "front raise", "frontheb", "shoulder", "schulter", "overhead press", "military", "arnold",
+      "upright row", "aufrechtes rudern", "y raise", "landmine press", "handstand", "pike push"), "shoulders", ["triceps"]),
+    (("pulldown", "pull down", "latzug", "pull up", "pull-up", "pullup", "klimmz", "chin up", "chin-up", "chinup", "pullover",
+      "überzug", "lat ", "muscle up"), "lats", ["biceps", "upper_back"]),
+    (("row", "ruder", "rudern"), "upper_back", ["lats", "biceps"]),
+    (("crunch", "sit up", "sit-up", "situp", "plank", "unterarmstütz", "bauch", " abs", "ab wheel", "ab roll", "leg raise",
+      "knee raise", "beinheben", "russian twist", "wood chop", "hollow", "v up", "v-up", "oblique", "dead bug", "mountain climber",
+      "toes to bar", "l-sit", "l sit", "pallof", "flutter", "bicycle", "side bend", "seitstütz", "core"), "abs", []),
+    (("neck", "nacken", "hals"), "neck", []),
+]
+
+
+def guess_muscles(name: str | None) -> tuple[str, list[str]] | None:
+    s = f" {(name or '').lower()} "
+    for words, primary, secondary in GUESS_RULES:
+        if any(w in s for w in words):
+            return primary, list(secondary)
+    return None
+
+
+# ---------- Beanspruchung durch Ausdauer- und andere Sportarten ----------
+# Gewicht je Muskel für 10 Minuten Aktivität, grob vergleichbar mit einem Arbeitssatz im Krafttraining.
+SPORT_MUSCLES: dict[str, dict[str, float]] = {
+    "run": {"quads": 0.8, "hamstrings": 0.6, "calves": 1.0, "glutes": 0.7, "abs": 0.2},
+    "ride": {"quads": 1.0, "glutes": 0.6, "hamstrings": 0.4, "calves": 0.5},
+    "walk": {"calves": 0.35, "quads": 0.25, "glutes": 0.25, "hamstrings": 0.15},
+    "hike": {"quads": 0.8, "glutes": 0.7, "calves": 0.7, "hamstrings": 0.4, "lower_back": 0.2},
+    "swim": {"lats": 1.0, "shoulders": 0.9, "chest": 0.5, "triceps": 0.5, "upper_back": 0.5, "abs": 0.3},
+    "row": {"upper_back": 1.0, "lats": 0.8, "quads": 0.7, "glutes": 0.5, "biceps": 0.4, "lower_back": 0.4},
+    "ski": {"quads": 1.0, "glutes": 0.6, "adductors": 0.4, "abs": 0.4, "calves": 0.3},
+    "climb": {"forearms": 1.0, "lats": 0.9, "biceps": 0.7, "upper_back": 0.7, "shoulders": 0.5, "abs": 0.4, "calves": 0.2},
+    "yoga": {"abs": 0.4, "hamstrings": 0.4, "shoulders": 0.3, "lower_back": 0.3, "glutes": 0.3},
+    "cardio": {"quads": 0.4, "calves": 0.3, "glutes": 0.3, "abs": 0.2, "shoulders": 0.2},
+    "team": {"quads": 0.7, "calves": 0.6, "hamstrings": 0.5, "glutes": 0.5, "adductors": 0.3},
+    "strength": {"chest": 0.3, "upper_back": 0.3, "lats": 0.3, "shoulders": 0.3, "quads": 0.3, "glutes": 0.3, "abs": 0.2},
+}

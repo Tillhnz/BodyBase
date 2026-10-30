@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import BodyMap from "../components/BodyMap.jsx";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { KernRings, StageBar } from "../components/charts.jsx";
 import { Loading, confirmDialog, toast } from "../components/feedback.jsx";
-import { EmptyState, MetricCard, SportIcon, useAsync } from "../components/ui.jsx";
+import { EmptyState, MetricCard, Segmented, SportIcon, useAsync } from "../components/ui.jsx";
 import { fmtDuration, fmtKm, fmtLongDay, fmtMinutes, fmtNum, fmtTime, weekdayShort } from "../fmt.js";
 
 function greeting() {
@@ -161,6 +162,8 @@ export default function Home({ user }) {
         {(summary || []).map((item) => <MetricCard key={item.key} item={item} to={`/metric/${item.key}`} />)}
       </div>
 
+      <BodyLoadPanel />
+
       <div className="grid-2">
         <section className="panel cat-activity">
           <div className="panel-head"><h2>Diese Woche</h2><Link className="link small" to="/activities">Aktivitäten</Link></div>
@@ -219,4 +222,47 @@ function relWhen(iso) {
   if (days === 0) return `Heute, ${t}`;
   if (days === 1) return `Gestern, ${t}`;
   return `${d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" })}, ${t}`;
+}
+
+
+const LOAD_RANGES = [{ value: 7, label: "7 Tage" }, { value: 30, label: "30 Tage" }, { value: 90, label: "90 Tage" }, { value: 365, label: "1 Jahr" }];
+
+/** Welche Körperregionen im Zeitraum beansprucht wurden: Krafttraining plus Rad, Laufen, Klettern & Co. */
+function BodyLoadPanel() {
+  const [days, setDays] = useState(() => { try { return Number(localStorage.getItem("bodybase-load-days")) || 30; } catch { return 30; } });
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    try { localStorage.setItem("bodybase-load-days", String(days)); } catch { /* privat */ }
+    api.get(`/strength/body-load?days=${days}`).then(setData).catch(() => setData(null));
+  }, [days]);
+  const values = {};
+  const detail = {};
+  for (const m of data?.muscles || []) {
+    if (m.value > 0) {
+      values[m.muscle] = m.value;
+      detail[m.muscle] = [m.strength ? `Kraft ${fmtNum(m.strength, m.strength % 1 ? 1 : 0)}` : null,
+        m.sports ? `Ausdauer & Sport ${fmtNum(m.sports, m.sports % 1 ? 1 : 0)}` : null].filter(Boolean).join(" · ");
+    }
+  }
+  const empty = data && !data.strength.sets && !data.sources.length;
+  return (
+    <section className="panel cat-activity">
+      <div className="panel-head">
+        <h2>Beanspruchte Körperregionen</h2>
+        <Segmented value={days} onChange={setDays} options={LOAD_RANGES} label="Zeitraum" />
+      </div>
+      {!data ? <p className="muted small">Lade …</p> : empty ? (
+        <p className="muted">Im Zeitraum gibt es kein Training. Krafttraining, Radfahren, Laufen, Klettern und andere Sportarten erscheinen hier als Körperkarte.</p>
+      ) : (
+        <>
+          <BodyMap values={values} unit="Punkte" detail={detail} />
+          <div className="load-sources">
+            {data.strength.sets > 0 && <span className="pill"><b>Kraft</b> {data.strength.workouts} Trainings · {data.strength.sets} Sätze</span>}
+            {data.sources.map((s) => <span key={s.sport} className="pill"><b>{s.label}</b> {fmtMinutes(s.minutes)}</span>)}
+          </div>
+          <p className="hint">Ein Punkt entspricht etwa einem Arbeitssatz. Ausdauer zählt je 10 Minuten anteilig für die beteiligten Muskeln, beim Radfahren also vor allem Oberschenkel, Gesäß und Waden, beim Klettern Unterarme, Rücken und Bizeps.</p>
+        </>
+      )}
+    </section>
+  );
 }

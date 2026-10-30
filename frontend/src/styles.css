@@ -287,7 +287,7 @@ a.metric-card:hover { border-color: color-mix(in srgb, var(--c, var(--iris)) 60%
 .draw { stroke-dasharray: 1; stroke-dashoffset: 0; animation: draw 1s ease-out backwards; }
 .spark .chart-line { stroke-width: 1.8; }
 
-.week-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; height: 132px; margin: 0.6rem 0 0.4rem; }
+.week-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; height: 78px; margin: 0.5rem 0 0.2rem; max-width: 420px; }
 .week-day { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; color: inherit; text-decoration: none; }
 .week-min { font-size: 0.75rem; color: var(--mute); height: 1rem; font-variant-numeric: tabular-nums; }
 .week-track { flex: 1; width: 100%; display: flex; align-items: flex-end; background: var(--ink-2); border-radius: 8px; overflow: hidden; }
@@ -307,7 +307,7 @@ a.metric-card:hover { border-color: color-mix(in srgb, var(--c, var(--iris)) 60%
 .stage-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 0.35rem; vertical-align: -1px; }
 
 .calendar { overflow-x: auto; padding-bottom: 0.3rem; }
-.calendar svg { min-width: 680px; }
+.calendar svg { display: block; max-width: 100%; height: auto; }
 .cal-0 { fill: var(--ink-2); }
 .cal-1 { fill: color-mix(in srgb, var(--c-activity) 25%, var(--ink-2)); }
 .cal-2 { fill: color-mix(in srgb, var(--c-activity) 50%, var(--ink-2)); }
@@ -666,4 +666,35 @@ details > summary { list-style-position: inside; }
   .sets-grid.cols-2.with-check { grid-template-columns: 38px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 42px; }
   .set-label { width: 36px; }
   .set-check { width: 42px; }
+}
+
+/* ---------- Körperkarte ---------- */
+
+:root { --body-base: color-mix(in srgb, var(--chalk) 9%, var(--panel)); }
+.body-map { display: grid; gap: 1.2rem; align-items: center; }
+.body-map.with-list { grid-template-columns: minmax(0, auto) minmax(0, 1fr); }
+.body-figs { position: relative; display: flex; justify-content: center; gap: 0.4rem; }
+.body-fig { height: 300px; width: auto; overflow: visible; }
+.body-map.size-sm .body-fig { height: 210px; }
+.body-part { stroke: var(--panel); stroke-width: 1.3; transition: fill 0.25s, opacity 0.2s; }
+.body-part.n { fill: color-mix(in srgb, var(--chalk) 5%, var(--panel)); }
+.body-part.m { fill: var(--body-base); cursor: pointer; }
+.body-part.m.hl { stroke: var(--chalk); stroke-width: 1.6; }
+.body-line { fill: none; stroke: var(--panel); stroke-width: 1.1; opacity: 0.8; pointer-events: none; }
+.body-cap { fill: var(--mute); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; }
+.body-tip { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
+  padding: 0.35rem 0.7rem; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line-2); box-shadow: var(--shadow); font-size: 0.85rem; pointer-events: none; white-space: nowrap; }
+.body-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
+.body-list li { display: grid; grid-template-columns: 140px 1fr 44px; gap: 0.6rem; align-items: center; font-size: 0.9rem; padding: 0.1rem 0.3rem; border-radius: 6px; }
+.body-list li.hl { background: var(--ink-2); }
+.body-bar { height: 8px; border-radius: 999px; background: var(--ink-2); overflow: hidden; }
+.body-bar i { display: block; height: 100%; border-radius: 999px; background: var(--body-accent, var(--c-activity)); transform-origin: left; animation: grow-x 0.7s cubic-bezier(.2,.8,.2,1) backwards; }
+.body-list .num { text-align: right; color: var(--mute); font-variant-numeric: tabular-nums; }
+.load-sources { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 1rem; }
+.load-sources .pill b { color: var(--chalk); font-weight: 600; }
+.ex-muscles { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
+@media (max-width: 800px) {
+  .body-map.with-list { grid-template-columns: 1fr; }
+  .body-fig { height: 250px; }
+  .body-list li { grid-template-columns: 120px 1fr 40px; }
 }

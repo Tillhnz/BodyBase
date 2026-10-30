@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from .models import Activity, Exercise, Routine, User, Workout, WorkoutSet
 from .store import ActivityIn, Writer
-from .strength_catalog import CATALOG, MUSCLE_GROUPS, MUSCLES
+from .strength_catalog import CATALOG, MUSCLE_GROUPS, MUSCLES, SPORT_MUSCLES, guess_muscles
 from .timeutil import local_day, parse_iso, utcnow
 
 SET_TYPES = ("normal", "warmup", "failure", "drop")
@@ -38,6 +38,19 @@ def seed_catalog(db: Session) -> None:
         row.name, row.equipment, row.primary = item["name"], item["equipment"], item["primary"]
         row.secondary, row.kind, row.aliases = item["secondary"], item["kind"], item["aliases"]
     db.commit()
+
+
+def assign_unknown_muscles(db: Session) -> int:
+    """Eigene Übungen ohne Muskelzuordnung (z. B. aus früheren Importen) nachträglich zuordnen."""
+    n = 0
+    for e in db.scalars(select(Exercise).where(Exercise.user_id.is_not(None), Exercise.primary == "other")):
+        guess = guess_muscles(e.name)
+        if guess:
+            e.primary, e.secondary = guess[0], guess[1]
+            n += 1
+    if n:
+        db.commit()
+    return n
 
 
 def norm(name: str | None) -> str:
@@ -94,7 +107,11 @@ class Matcher:
         hint = norm(m.group(1)) if m else ""
         equipment = EQUIP_HINTS.get(hint, "other")
         kind = kind_hint or ("bodyweight" if equipment == "bodyweight" else "weight_reps")
-        e = Exercise(user_id=self.user_id, name=name.strip()[:120], equipment=equipment, primary="other", secondary=[],
+        guess = guess_muscles(name)
+        primary, secondary = guess if guess else ("other", [])
+        if primary == "cardio" and not kind_hint:
+            kind = "distance"
+        e = Exercise(user_id=self.user_id, name=name.strip()[:120], equipment=equipment, primary=primary, secondary=secondary,
                      kind=kind, aliases=[])
         self.db.add(e)
         self.db.flush()
@@ -342,6 +359,7 @@ def workout_dict(db: Session, w: Workout, full: bool = False, names: dict | None
         b["name"] = e.name if e else "Übung"
         b["kind"] = e.kind if e else "weight_reps"
         b["primary"] = e.primary if e else "other"
+        b["secondary"] = (e.secondary or []) if e else []
         b["best"] = _best_set_text(b["sets"], b["kind"])
     if full:
         out["exercises"] = blocks
@@ -530,6 +548,62 @@ def _calendar(ws: list, today_: date) -> list[dict]:
     return [{"day": d, "minutes": m} for d, m in sorted(mins.items())]
 
 
+FULL_BODY = {"chest": 0.3, "upper_back": 0.3, "lats": 0.3, "shoulders": 0.3, "quads": 0.3, "glutes": 0.3, "hamstrings": 0.2,
+             "abs": 0.3, "biceps": 0.15, "triceps": 0.15}
+
+
+def body_load(db: Session, user_id: int, days: int, today_: date) -> dict:
+    """Beanspruchung je Muskel über alle Sportarten.
+
+    Krafttraining: jeder Arbeitssatz zählt 1 für den Hauptmuskel und 0,5 für Nebenmuskeln.
+    Andere Sportarten: je 10 Minuten ein Gewicht je Muskel (SPORT_MUSCLES), grob vergleichbar mit einem Satz.
+    """
+    from .sports import SPORTS
+    start = today_ - timedelta(days=days - 1) if days else date(1970, 1, 1)
+    strength: dict[str, float] = defaultdict(float)
+    other: dict[str, float] = defaultdict(float)
+    exs = {e.id: e for e in exercises_for(db, user_id)}
+    wids = [w.id for w in db.scalars(select(Workout).where(Workout.user_id == user_id, Workout.day >= start))]
+    sets_total = 0
+    if wids:
+        for s in db.scalars(select(WorkoutSet).where(WorkoutSet.workout_id.in_(wids), WorkoutSet.type != "warmup")):
+            e = exs.get(s.exercise_id)
+            if not e or e.primary == "cardio":
+                continue
+            sets_total += 1
+            if e.primary == "full_body":
+                for m, w in FULL_BODY.items():
+                    strength[m] += w
+            elif e.primary != "other":
+                strength[e.primary] += 1
+            for m in e.secondary or []:
+                if m in MUSCLES and m not in ("cardio", "full_body", "other"):
+                    strength[m] += 0.5
+    sources: dict[str, dict] = {}
+    acts = db.scalars(select(Activity).where(Activity.user_id == user_id, Activity.day >= start,
+                                             Activity.duplicate_of.is_(None), Activity.source.not_in([SOURCE, "hevy"])))
+    for a in acts:
+        weights = SPORT_MUSCLES.get(a.sport)
+        minutes = ((a.moving_s or a.duration_s) or 0) / 60
+        if not weights or minutes <= 0:
+            continue
+        src = sources.setdefault(a.sport, {"sport": a.sport, "label": SPORTS.get(a.sport, a.sport), "minutes": 0, "count": 0})
+        src["minutes"] += round(minutes)
+        src["count"] += 1
+        for m, w in weights.items():
+            other[m] += minutes / 10 * w
+    muscles = []
+    for m in MUSCLES:
+        if m in ("cardio", "full_body", "other"):
+            continue
+        v = strength.get(m, 0) + other.get(m, 0)
+        muscles.append({"muscle": m, "label": MUSCLES[m], "group": MUSCLE_GROUPS.get(m), "value": round(v, 1),
+                        "strength": round(strength.get(m, 0), 1), "sports": round(other.get(m, 0), 1)})
+    muscles.sort(key=lambda x: -x["value"])
+    return {"days": days, "muscles": muscles, "sources": sorted(sources.values(), key=lambda x: -x["minutes"]),
+            "strength": {"workouts": len(wids), "sets": sets_total}}
+
+
 # ---------- Routinen ----------
 
 def clean_routine(db: Session, user_id: int, data: dict) -> dict:
@@ -632,6 +706,51 @@ def _parse_dt(text: str | None) -> datetime | None:
         return None
 
 
+def _import_routines(db: Session, user: User, reader, ex_col: str, title_col: str) -> dict:
+    """Routinen ohne Datum (z. B. Hevy-Routinen-Export): je Titel eine Routine mit Übungen und Zielsätzen."""
+    matcher = Matcher(db, user.id)
+    routines: dict[str, dict] = {}
+    for row in reader:
+        g = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k}
+        title, ex_name = g.get(title_col), g.get(ex_col)
+        if not title or not ex_name:
+            continue
+        r = routines.setdefault(title, {"name": title, "folder": g.get("folder") or g.get("folder_title") or None,
+                                        "notes": g.get("description") or g.get("notes") or None, "exercises": []})
+        e = matcher.get(ex_name)
+        if not r["exercises"] or r["exercises"][-1]["exercise_id"] != e.id:
+            rest = _num(g.get("rest_seconds") or g.get("rest_s") or g.get("rest"), int)
+            r["exercises"].append({"exercise_id": e.id, "rest_s": rest if rest is not None else 90,
+                                   "notes": g.get("exercise_notes") or None, "superset": _num(g.get("superset_id"), int), "sets": []})
+        kg = _num(g.get("weight_kg") or g.get("weight"))
+        reps = _num(g.get("reps"), int)
+        if reps is None and g.get("rep_range_start"):
+            reps = _num(g.get("rep_range_start"), int)
+        r["exercises"][-1]["sets"].append({
+            "type": HEVY_TYPES.get((g.get("set_type") or "normal").lower(), "normal"), "kg": kg, "reps": reps,
+            "duration_s": _num(g.get("duration_seconds"), int), "distance_m": (_num(g.get("distance_km")) or 0) * 1000 or None})
+    db.commit()
+    if not routines:
+        raise StrengthError("In der Datei wurden keine Routinen oder Trainings erkannt.")
+    created = updated = 0
+    for data in routines.values():
+        values = clean_routine(db, user.id, data)
+        row = db.scalar(select(Routine).where(Routine.user_id == user.id, Routine.name == values["name"]))
+        if row is None:
+            from sqlalchemy import func as _f
+            pos = (db.scalar(select(_f.max(Routine.position)).where(Routine.user_id == user.id)) or 0) + 1
+            row = Routine(user_id=user.id, position=pos, **values)
+            db.add(row)
+            created += 1
+        else:
+            for k, v in values.items():
+                setattr(row, k, v)
+            updated += 1
+        row.updated_at = utcnow()
+    db.commit()
+    return {"source": "routines", "created": created, "updated": updated, "skipped": 0, "new_exercises": matcher.created}
+
+
 def _strong_duration(text: str | None) -> int | None:
     """Strong: '1h 5m', '45m', '3600' (Sekunden)."""
     if not text:
@@ -663,6 +782,10 @@ def import_csv(db: Session, user: User, raw: bytes) -> dict:
     cols = {c.strip().lower(): c for c in (reader.fieldnames or [])}
     hevy = "exercise_title" in cols and "start_time" in cols
     strong = "exercise name" in cols and "date" in cols
+    ex_col = next((c for c in ("exercise_title", "exercise name", "exercise", "übung") if c in cols), None)
+    title_col = next((c for c in ("routine_title", "routine", "title", "routine name", "workout name", "name") if c in cols), None)
+    if not hevy and not strong and ex_col and title_col:
+        return _import_routines(db, user, reader, ex_col, title_col)
     if not hevy and not strong:
         found = ", ".join(list(cols)[:8]) or "keine"
         raise StrengthError("Unbekanntes Format. Erwartet wird der Export aus Hevy (workouts.csv) oder Strong (strong.csv). "

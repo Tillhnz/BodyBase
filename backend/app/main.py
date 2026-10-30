@@ -22,8 +22,11 @@ async def lifespan(app: FastAPI):
     ensure_columns()
     with SessionLocal() as db:
         server_settings.apply_overrides(db)
-        from .strength import seed_catalog
+        from . import sports
+        from .strength import assign_unknown_muscles, seed_catalog
         seed_catalog(db)
+        assign_unknown_muscles(db)
+        sports.migrate(db)
     audit.event("System", "server.start", f"BodyBase {__version__} gestartet")
     sync.start_background()
     yield

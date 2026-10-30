@@ -284,6 +284,11 @@ def summary(days: int = Query(30, ge=0, le=3650), user: User = Depends(current_u
     return S.summary(db, user.id, days, today())
 
 
+@router.get("/body-load")
+def body_load(days: int = Query(30, ge=0, le=3650), user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return S.body_load(db, user.id, days, today())
+
+
 @router.post("/import")
 async def import_file(file: UploadFile = File(...), user: User = Depends(current_user), db: Session = Depends(get_db)):
     raw = await file.read(30 * 1024 * 1024 + 1)

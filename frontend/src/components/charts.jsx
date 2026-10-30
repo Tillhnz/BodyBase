@@ -278,10 +278,11 @@ export function Calendar({ data, end, days = 365 }) {
     cells.push({ iso, m, lvl, col: Math.floor(idx / 7), row: idx % 7, month: d.getDate() === 1 ? d : null });
   }
   const cols = Math.max(...cells.map((c) => c.col)) + 1;
-  const s = 12, g = 3;
+  const s = 10, g = 2.5;
   return (
     <div className="calendar">
-      <svg viewBox={`0 0 ${cols * (s + g) + 30} ${7 * (s + g) + 18}`} role="img" aria-label="Trainingskalender">
+      <svg viewBox={`0 0 ${cols * (s + g) + 30} ${7 * (s + g) + 18}`} width={cols * (s + g) + 30} height={7 * (s + g) + 18}
+        role="img" aria-label="Trainingskalender">
         {["Mo", "Mi", "Fr"].map((t, i) => <text key={t} className="chart-axis" x={0} y={18 + (i * 2) * (s + g) + s - 2}>{t}</text>)}
         {cells.map((c) => (
           <g key={c.iso}>

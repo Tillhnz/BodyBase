@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { confirmDialog, Loading, toast } from "../components/feedback.jsx";
 import { EmptyState, Kpi, useAsync } from "../components/ui.jsx";
 import { fmtNum } from "../fmt.js";
+import BodyMap, { valuesFromBlocks } from "../components/BodyMap.jsx";
 import BlockEditor from "./BlockEditor.jsx";
 import {
   e1rm, fmtClock, fmtKg, fmtVolume, fromDraftBlock, loadExercises, setText, startWorkout, toDraftBlock, useExercises,
@@ -120,6 +121,10 @@ export default function WorkoutDetail() {
         <Kpi label="Wiederholungen" value={fmtNum(w.reps)} />
         <Kpi label="Rekorde" value={fmtNum(w.prs.length)} />
       </div>
+      <section className="panel">
+        <div className="panel-head"><h2>Trainierte Muskeln</h2><span className="tiny muted">Arbeitssätze, Nebenmuskeln zählen halb</span></div>
+        <BodyMap values={valuesFromBlocks(w.exercises)} unit="Sätze" />
+      </section>
       {w.notes && <section className="panel"><p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{w.notes}</p></section>}
       <div className="grid-2">
         {w.exercises.map((b, i) => {

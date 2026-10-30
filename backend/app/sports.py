@@ -5,6 +5,7 @@ SPORTS = {
     "ride": "Radfahren",
     "walk": "Gehen",
     "hike": "Wandern",
+    "climb": "Klettern & Bouldern",
     "swim": "Schwimmen",
     "strength": "Krafttraining",
     "row": "Rudern",
@@ -22,7 +23,8 @@ _HINTS: list[tuple[str, tuple[str, ...]]] = [
     ("swim", ("swim", "schwimm", "pool", "open_water", "openwater")),
     ("ride", ("ride", "cycl", "bike", "biking", "velo", "gravel", "spinning", "indoor_cycling", "bicycle", "mtb", "zwift", "radfahr", "rennrad", "radtour")),
     ("run", ("run", "lauf", "jog", "trail", "treadmill", "track")),
-    ("hike", ("hike", "hiking", "wander", "mountaineer", "berg", "climb", "kletter", "boulder")),
+    ("climb", ("climb", "kletter", "boulder", "bouldering")),
+    ("hike", ("hike", "hiking", "wander", "mountaineer", "berg")),
     ("walk", ("walk", "geh", "spazier", "nordic", "stroll")),
     ("strength", ("strength", "weight", "kraft", "gym", "functional", "crossfit", "lifting", "resistance", "calisthen")),
     ("yoga", ("yoga", "pilates", "stretch", "mobility", "breath", "meditat", "barre", "tai chi")),
@@ -39,3 +41,18 @@ def normalize(raw: str | None) -> str:
         if any(h in s for h in hints):
             return sport
     return "other"
+
+
+def migrate(db) -> None:
+    """Bestehende Aktivitäten nach geänderten Regeln neu einordnen (z. B. Bouldern war früher „Wandern“)."""
+    from sqlalchemy import select
+
+    from .models import Activity
+    changed = 0
+    for a in db.scalars(select(Activity).where(Activity.sport.in_(["hike", "other", "cardio"]))):
+        new = normalize(a.sport_raw or a.name)
+        if new == "climb" and a.sport != "climb":
+            a.sport = "climb"
+            changed += 1
+    if changed:
+        db.commit()

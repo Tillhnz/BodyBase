@@ -5,6 +5,7 @@ import { LineChart } from "../components/charts.jsx";
 import { confirmDialog, Loading, toast } from "../components/feedback.jsx";
 import { EmptyState, Kpi, Segmented, useAsync } from "../components/ui.jsx";
 import { fmtDate, fmtNum } from "../fmt.js";
+import BodyMap from "../components/BodyMap.jsx";
 import { ExerciseForm } from "./ExercisePicker.jsx";
 import { GROUP_COLORS, fmtClock, fmtKg, fmtVolume, loadExercises, setText, useExercises } from "./shared.js";
 
@@ -15,14 +16,15 @@ export function ExerciseLibrary() {
   const [q, setQ] = useState("");
   const [group, setGroup] = useState("");
   const [onlyUsed, setOnlyUsed] = useState(false);
+  const [unassigned, setUnassigned] = useState(false);
   const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
   const list = useMemo(() => {
     if (!ex) return [];
     const needle = q.trim().toLowerCase();
-    return ex.items.filter((e) => !e.archived && (!group || e.group === group) && (!onlyUsed || e.count)
+    return ex.items.filter((e) => !e.archived && (!group || e.group === group) && (!onlyUsed || e.count) && (!unassigned || e.primary === "other")
       && (!needle || e.name.toLowerCase().includes(needle) || e.aliases.some((a) => a.toLowerCase().includes(needle))));
-  }, [ex, q, group, onlyUsed]);
+  }, [ex, q, group, onlyUsed, unassigned]);
   if (!ex) return <Loading rows={3} />;
   return (
     <div className="cat-activity">
@@ -37,6 +39,7 @@ export function ExerciseLibrary() {
       <div className="filters" style={{ marginBottom: "1rem" }}>
         <input type="search" placeholder="Suchen …" value={q} onChange={(e) => setQ(e.target.value)} />
         <label className="check"><input type="checkbox" checked={onlyUsed} onChange={(e) => setOnlyUsed(e.target.checked)} />Nur benutzte</label>
+        <label className="check"><input type="checkbox" checked={unassigned} onChange={(e) => setUnassigned(e.target.checked)} />Ohne Muskelzuordnung ({ex.items.filter((e) => !e.archived && e.primary === "other").length})</label>
       </div>
       <div className="chips" style={{ marginBottom: "1rem" }}>
         <button type="button" className={`chip${!group ? " on" : ""}`} onClick={() => setGroup("")}>Alle</button>
@@ -120,6 +123,14 @@ export function ExerciseDetail() {
           </div>
         )}
       </div>
+      <section className="panel ex-muscles">
+        <BodyMap values={{ ...Object.fromEntries(e.secondary.map((m) => [m, 1])), [e.primary]: 2 }} unit="" list={false} size="sm" />
+        <div>
+          <p style={{ marginTop: 0 }}><strong>Hauptmuskel:</strong> {exs.meta.muscles[e.primary]}</p>
+          <p><strong>Weitere:</strong> {e.secondary.length ? e.secondary.map((x) => exs.meta.muscles[x]).join(", ") : "keine"}</p>
+          {e.primary === "other" && <p className="hint">Noch keinem Muskel zugeordnet.{e.custom ? " Unter „Bearbeiten“ festlegen, dann zählt die Übung in Körperkarte und Auswertung." : ""}</p>}
+        </div>
+      </section>
       {!data.sessions.length ? (
         <EmptyState title="Noch nicht trainiert" text="Sobald du die Übung in einem Training einträgst, erscheinen hier Verlauf und Rekorde." />
       ) : (

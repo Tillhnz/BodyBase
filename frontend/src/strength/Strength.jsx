@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
+import BodyMap from "../components/BodyMap.jsx";
 import { Calendar, useWidth } from "../components/charts.jsx";
 import { confirmDialog, Loading, toast } from "../components/feedback.jsx";
 import { Delta, EmptyState, Kpi, Segmented, useAsync } from "../components/ui.jsx";
@@ -150,7 +151,7 @@ function ImportButton({ onDone }) {
     try {
       const r = await uploadImport(f, setBusy);
       await loadExercises(true);
-      toast(`${r.source === "hevy" ? "Hevy" : "Strong"}: ${r.created} neue, ${r.updated} aktualisierte Trainings${r.new_exercises ? `, ${r.new_exercises} neue Übungen` : ""}${r.skipped ? `, ${r.skipped} übersprungen` : ""}`);
+      toast(r.source === "routines" ? `${r.created} neue, ${r.updated} aktualisierte Routinen${r.new_exercises ? `, ${r.new_exercises} neue Übungen` : ""}` : `${r.source === "hevy" ? "Hevy" : "Strong"}: ${r.created} neue, ${r.updated} aktualisierte Trainings${r.new_exercises ? `, ${r.new_exercises} neue Übungen` : ""}${r.skipped ? `, ${r.skipped} übersprungen` : ""}`);
       onDone?.();
     } catch (err) {
       toast(err.message === "Failed to fetch" ? "Verbindung abgebrochen. Bitte erneut versuchen." : err.message, "error");
@@ -196,7 +197,8 @@ function Stats({ sum, days }) {
           <div className="panel-head"><h2>Muskelverteilung</h2><span className="tiny muted">Arbeitssätze, Nebenmuskeln zählen halb</span></div>
           {sum.groups.length ? (
             <>
-              <div className="group-bars">
+              <BodyMap values={Object.fromEntries(sum.muscles.map((x) => [x.muscle, x.sets]))} unit="Sätze" list={false} size="sm" />
+              <div className="group-bars" style={{ marginTop: "1rem" }}>
                 {sum.groups.map((g) => (
                   <div key={g.group} className="group-bar" style={{ "--c": GROUP_COLORS[g.group] || "var(--iris)" }}>
                     <span>{g.group}</span>

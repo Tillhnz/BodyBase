@@ -192,3 +192,58 @@ def test_chunked_gzip_import(client, auth):
     bad = client.post("/api/strength/import/chunk", content=b"x", headers={
         **auth, "X-Upload-Id": "../../etc", "X-Chunk-Index": "0", "X-Chunk-Total": "1"})
     assert bad.status_code == 422
+
+
+def test_guess_muscles_for_unknown_exercises(client, auth):
+    from app.strength_catalog import guess_muscles
+    assert guess_muscles("Lat Pulldown - Wide Grip (Cable)")[0] == "lats"
+    assert guess_muscles("Leg Curl (Machine)")[0] == "hamstrings"
+    assert guess_muscles("Bicep Curl (Cable)")[0] == "biceps"
+    assert guess_muscles("Glute Kickback on Machine")[0] == "glutes"
+    assert guess_muscles("Völlig unbekannt") is None
+    csv = HEVY_CSV.replace("Mystery Machine Row", "Single Arm Cable Curl").replace("Pull", "Guess Pull")
+    client.post("/api/strength/import", files={"file": ("w.csv", csv.encode(), "text/csv")}, headers=auth)
+    ex = next(e for e in client.get("/api/strength/exercises", headers=auth).json() if e["name"] == "Single Arm Cable Curl")
+    assert ex["primary"] == "biceps" and ex["custom"]
+
+
+def test_body_load_combines_strength_and_sports(client, auth, db):
+    from datetime import date
+    from app.models import User
+    from app.store import ActivityIn, Writer
+    bench = _ex(client, auth, "Bankdrücken (Langhantel)")
+    now = datetime.utcnow().replace(microsecond=0) - timedelta(hours=3)
+    client.post("/api/strength/workouts", json=_workout(now, 60, ex_id=bench["id"]), headers=auth)
+    me = client.get("/api/me", headers=auth).json()
+    u = db.get(User, me["id"])
+    w = Writer(db, u.id, "strava")
+    w.activity(ActivityIn(source_id="ride1", start=now - timedelta(hours=1), sport_raw="Ride", duration_s=3600, distance_m=30000))
+    w.activity(ActivityIn(source_id="boulder1", start=now - timedelta(days=1), sport_raw="Bouldering", duration_s=5400))
+    w.flush()
+    r = client.get("/api/strength/body-load?days=7", headers=auth).json()
+    m = {x["muscle"]: x for x in r["muscles"]}
+    assert m["chest"]["strength"] == 3 and m["triceps"]["strength"] == 1.5
+    assert m["quads"]["sports"] >= 6  # 60 Minuten Rad
+    assert m["forearms"]["sports"] >= 9  # 90 Minuten Bouldern
+    assert {s["sport"] for s in r["sources"]} >= {"ride", "climb"}
+    assert date.today()
+
+
+ROUTINE_CSV = '''title,folder_title,exercise_title,set_type,weight_kg,reps,rest_seconds
+"Push A","PPL","Bench Press (Barbell)",normal,80,8,120
+"Push A","PPL","Bench Press (Barbell)",normal,80,8,120
+"Push A","PPL","Lateral Raise (Dumbbell)",normal,10,15,60
+"Beine","PPL","Squat (Barbell)",normal,100,5,180
+'''
+
+
+def test_import_routines_csv(client, auth):
+    r = client.post("/api/strength/import", files={"file": ("routines.csv", ROUTINE_CSV.encode(), "text/csv")}, headers=auth)
+    assert r.status_code == 200, r.text
+    assert r.json()["source"] == "routines" and r.json()["created"] == 2
+    routines = {x["name"]: x for x in client.get("/api/strength/routines", headers=auth).json()}
+    push = routines["Push A"]
+    assert push["folder"] == "PPL" and len(push["exercises"]) == 2 and len(push["exercises"][0]["sets"]) == 2
+    assert push["exercises"][0]["rest_s"] == 120
+    again = client.post("/api/strength/import", files={"file": ("routines.csv", ROUTINE_CSV.encode(), "text/csv")}, headers=auth).json()
+    assert again["created"] == 0 and again["updated"] == 2
