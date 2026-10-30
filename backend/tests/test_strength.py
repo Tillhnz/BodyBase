@@ -143,3 +143,27 @@ def test_track_is_not_overwritten_by_summary(db, user):
     w.activity(ActivityIn(source_id="t1", start=datetime(2026, 10, 2, 8), distance_m=5000, polyline="grob", details={"x": 1}))
     again = db.get(Activity, row.id)
     assert again.polyline == "genau" and again.details["profile"] and again.details["x"] == 1
+
+
+def test_parse_dates_in_any_language():
+    from app.strength import _parse_dt
+    a = _parse_dt("28 Oct 2026, 18:05")
+    for t in ("28. Okt. 2026, 18:05", "28 Okt 2026, 18:05", "Oct 28, 2026, 6:05 PM", "28.10.2026 18:05", "2026-10-28 18:05:00",
+              "28 Oktober 2026 18:05"):
+        assert _parse_dt(t) == a, t
+
+
+def test_import_german_hevy_and_errors(client, auth):
+    german = HEVY_CSV.replace("28 Oct 2026", "28. Okt. 2026")
+    r = client.post("/api/strength/import", files={"file": ("workouts.csv", german.encode(), "text/csv")}, headers=auth)
+    assert r.status_code == 200 and r.json()["created"] == 1, r.text
+    broken = HEVY_CSV.replace("28 Oct 2026, 18:05", "irgendwann")
+    r = client.post("/api/strength/import", files={"file": ("w.csv", broken.encode(), "text/csv")}, headers=auth)
+    assert r.status_code == 422 and "irgendwann" in r.json()["detail"]
+    import io as _io
+    import zipfile as _zf
+    buf = _io.BytesIO()
+    with _zf.ZipFile(buf, "w") as z:
+        z.writestr("workouts.csv", HEVY_CSV.replace("Pull", "Zip Pull"))
+    r = client.post("/api/strength/import", files={"file": ("export.zip", buf.getvalue(), "application/zip")}, headers=auth)
+    assert r.status_code == 200 and r.json()["created"] == 1, r.text

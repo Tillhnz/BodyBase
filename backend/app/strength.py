@@ -579,21 +579,57 @@ def routine_from_workout(db: Session, w: Workout, name: str | None = None) -> di
 HEVY_TYPES = {"warmup": "warmup", "normal": "normal", "failure": "failure", "dropset": "drop", "drop": "drop"}
 
 
+MONTHS = {
+    "jan": 1, "januar": 1, "january": 1, "jän": 1, "feb": 2, "februar": 2, "february": 2, "mär": 3, "mrz": 3, "märz": 3,
+    "mar": 3, "march": 3, "apr": 4, "april": 4, "mai": 5, "may": 5, "jun": 6, "juni": 6, "june": 6, "jul": 7, "juli": 7,
+    "july": 7, "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "okt": 10, "oct": 10, "oktober": 10,
+    "october": 10, "nov": 11, "november": 11, "dez": 12, "dec": 12, "dezember": 12, "december": 12,
+}
+
+
 def _parse_dt(text: str | None) -> datetime | None:
-    """Hevy: '28 Oct 2024, 18:05', Strong: '2024-10-28 18:05:00'. Zeiten sind Ortszeit."""
+    """Datum aus Hevy/Strong, in jeder Sprache der App. Zeiten sind Ortszeit.
+
+    Beispiele: '28 Oct 2024, 18:05', '28. Okt. 2024, 18:05', 'Oct 28, 2024, 6:05 PM', '2024-10-28 18:05:00', '28.10.2024 18:05'
+    """
     if not text:
         return None
-    text = text.strip().strip('"')
+    from datetime import timezone
+
     from .timeutil import tz
-    for fmt in ("%d %b %Y, %H:%M", "%d %b %Y %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S",
-                "%d.%m.%Y %H:%M", "%d.%m.%Y, %H:%M"):
+    t = text.strip().strip('"').strip()
+
+    def local(y, mo, d, h=0, mi=0, sec=0):
         try:
-            local = datetime.strptime(text, fmt)
+            return datetime(y, mo, d, h, mi, sec).replace(tzinfo=tz()).astimezone(timezone.utc).replace(tzinfo=None)
         except ValueError:
-            continue
-        from datetime import timezone
-        return local.replace(tzinfo=tz()).astimezone(timezone.utc).replace(tzinfo=None)
-    return parse_iso(text)
+            return None
+
+    # ISO und Zahlenformate
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?", t)
+    if m and not re.search(r"(Z|[+-]\d{2}:?\d{2})$", t):
+        return local(*(int(x or 0) for x in m.groups()))
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{4}),?\s+(\d{1,2}):(\d{2})", t)
+    if m:
+        d, mo, y, h, mi = (int(x) for x in m.groups())
+        return local(y, mo, d, h, mi)
+    # Monatsnamen (deutsch, englisch …), mit 12-Stunden-Uhr
+    ampm = re.search(r"\b(am|pm)\b", t, re.I)
+    tm = re.search(r"(\d{1,2}):(\d{2})", t)
+    words = re.findall(r"[A-Za-zÄÖÜäöü]+", t)
+    month = next((MONTHS[w.lower().rstrip(".")] for w in words if w.lower().rstrip(".") in MONTHS), None)
+    nums = [int(x) for x in re.findall(r"\d+", re.sub(r"\d{1,2}:\d{2}", " ", t))]
+    year = next((n for n in nums if n > 1900), None)
+    day = next((n for n in nums if 1 <= n <= 31), None)
+    if month and year and day:
+        h, mi = (int(tm.group(1)), int(tm.group(2))) if tm else (0, 0)
+        if ampm:
+            h = h % 12 + (12 if ampm.group(1).lower() == "pm" else 0)
+        return local(year, month, day, h, mi)
+    try:
+        return parse_iso(t)
+    except Exception:
+        return None
 
 
 def _strong_duration(text: str | None) -> int | None:
@@ -610,6 +646,16 @@ def _strong_duration(text: str | None) -> int | None:
 
 
 def import_csv(db: Session, user: User, raw: bytes) -> dict:
+    if raw[:2] == b"PK":  # manche Handys verpacken den Export als ZIP
+        import zipfile
+        try:
+            z = zipfile.ZipFile(io.BytesIO(raw))
+            name = next((n for n in z.namelist() if n.lower().endswith(".csv")), None)
+        except zipfile.BadZipFile:
+            name = None
+        if not name:
+            raise StrengthError("In der ZIP-Datei ist keine CSV-Datei.")
+        raw = z.read(name)
     text = raw.decode("utf-8-sig", errors="replace")
     first = text.splitlines()[0] if text else ""
     delim = ";" if first.count(";") > first.count(",") else ","
@@ -618,9 +664,12 @@ def import_csv(db: Session, user: User, raw: bytes) -> dict:
     hevy = "exercise_title" in cols and "start_time" in cols
     strong = "exercise name" in cols and "date" in cols
     if not hevy and not strong:
-        raise StrengthError("Unbekanntes Format. Erwartet wird der Export aus Hevy (workouts.csv) oder Strong (strong.csv).")
+        found = ", ".join(list(cols)[:8]) or "keine"
+        raise StrengthError("Unbekanntes Format. Erwartet wird der Export aus Hevy (workouts.csv) oder Strong (strong.csv). "
+                            f"Gefundene Spalten: {found}")
     matcher = Matcher(db, user.id)
     groups: dict[str, dict] = {}
+    bad_dates: list[str] = []
     for row in reader:
         g = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k}
         if hevy:
@@ -653,7 +702,12 @@ def import_csv(db: Session, user: User, raw: bytes) -> dict:
             if dist is not None and (g.get("distance unit") or "m").lower() in ("km",):
                 dist *= 1000
             notes, wnotes, superset = g.get("notes"), g.get("workout notes"), None
-        if not start or not ex_name:
+        if not start:
+            raw_date = g.get("start_time") if hevy else g.get("date")
+            if raw_date and len(bad_dates) < 3:
+                bad_dates.append(raw_date)
+            continue
+        if not ex_name:
             continue
         wo = groups.setdefault(key, {"name": title, "start": start, "end": end, "notes": wnotes or None, "exercises": []})
         exercise = matcher.get(ex_name, "duration" if (dur and not reps and not kg) else None)
@@ -662,6 +716,11 @@ def import_csv(db: Session, user: User, raw: bytes) -> dict:
         wo["exercises"][-1]["sets"].append({"type": set_type, "kg": kg if kg else None, "reps": reps, "duration_s": dur,
                                             "distance_m": dist, "rpe": rpe})
     db.commit()
+    if not groups:
+        sample = next(iter(bad_dates), "")
+        raise StrengthError(
+            "In der Datei wurde kein Training erkannt." + (f" Das Datum „{sample}“ ist nicht lesbar." if sample else
+                                                           " Die Datei enthält keine Sätze."))
     source = "hevy" if hevy else "strong"
     created = updated = skipped = 0
     for key, wo in sorted(groups.items(), key=lambda t: t[1]["start"]):

@@ -124,7 +124,7 @@ function ImportButton({ onDone }) {
       <button className="btn" onClick={() => ref.current?.click()} disabled={busy} title="CSV-Export aus Hevy (Einstellungen → Daten exportieren) oder Strong">
         {busy ? "Importiere …" : "Importieren"}
       </button>
-      <input ref={ref} type="file" accept=".csv,text/csv" hidden onChange={onFile} />
+      <input ref={ref} type="file" accept=".csv,.zip,.txt,text/csv,text/comma-separated-values,text/plain,application/vnd.ms-excel,application/zip" hidden onChange={onFile} />
     </>
   );
 }
