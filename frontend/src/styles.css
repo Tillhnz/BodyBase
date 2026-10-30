@@ -698,3 +698,22 @@ details > summary { list-style-position: inside; }
   .body-fig { height: 250px; }
   .body-list li { grid-template-columns: 120px 1fr 40px; }
 }
+
+/* ---------- Verknüpfte Daten ---------- */
+
+.linked-kpis { display: flex; flex-wrap: wrap; gap: 1.6rem; margin-bottom: 0.9rem; }
+.linked-kpis div { display: flex; flex-direction: column; }
+.linked-kpis b { font-family: var(--font-display); font-size: 1.7rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.linked-kpis small { color: var(--mute); font-size: 0.78rem; }
+.hr-zones { margin: 0.4rem 0 1rem; }
+.hr-zone-bar { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--ink-2); }
+.hr-zone-bar i { display: block; height: 100%; }
+.hr-zone-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-top: 0.5rem; font-size: 0.8rem; color: var(--mute); }
+.hr-zone-legend b { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.35rem; vertical-align: middle; }
+.linked-list { display: grid; gap: 0.4rem; margin-top: 0.4rem; }
+.linked .version-row { align-items: center; }
+.row-actions { display: flex; gap: 0.8rem; margin-left: auto; }
+.row-actions button.link { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
+.linked-cands { margin-top: 0.9rem; }
+.linked-cands summary { cursor: pointer; color: var(--mute); margin-bottom: 0.5rem; }
+.linked-cands .version-row { margin-bottom: 0.4rem; }

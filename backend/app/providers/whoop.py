@@ -97,4 +97,14 @@ def map_workout(r: dict) -> ActivityIn:
         duration_s=(end - start).total_seconds() if start and end else None, distance_m=num(s.get("distance_meter")),
         elevation_m=num(s.get("altitude_gain_meter")), calories=kj / 4.184 if kj else None,
         avg_hr=num(s.get("average_heart_rate")), max_hr=num(s.get("max_heart_rate")), load=num(s.get("strain")),
+        details=hr_zones(s.get("zone_durations") or s.get("zone_duration")),
     )
+
+
+def hr_zones(z: dict | None) -> dict | None:
+    """Zeit in den Herzfrequenzzonen 0–5 (Sekunden)."""
+    if not isinstance(z, dict):
+        return None
+    keys = ["zone_zero_milli", "zone_one_milli", "zone_two_milli", "zone_three_milli", "zone_four_milli", "zone_five_milli"]
+    secs = [round((num(z.get(k)) or 0) / 1000) for k in keys]
+    return {"hr_zones": secs} if any(secs) else None

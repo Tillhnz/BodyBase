@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { Calendar, LoadChart, decodePolyline, useWidth } from "../components/charts.jsx";
 import RouteMap from "../components/RouteMap.jsx";
+import Linked from "../components/Linked.jsx";
 import { Loading, confirmDialog, toast } from "../components/feedback.jsx";
 import { EmptyState, Kpi, Segmented, SportIcon, useAsync } from "../components/ui.jsx";
 import { fmtDuration, fmtKm, fmtNum, fmtTime, todayIso } from "../fmt.js";
@@ -267,18 +268,10 @@ export function ActivityDetail() {
             </table></div>
           </section>
         ) : null}
-        <section className="panel">
-          <div className="panel-head"><h2>Quellen dieser Einheit</h2></div>
-          <div className="versions">
-            {a.versions.map((v) => (
-              <div key={v.id} className="version-row">
-                <span><strong>{v.source_name}</strong>{v.primary && <span className="pill iris" style={{ marginLeft: "0.5rem" }}>zählt</span>}</span>
-                <span className="muted">{v.distance_m ? `${fmtKm(v.distance_m, 2)} km · ` : ""}{fmtDuration(v.duration_s)}{v.avg_hr ? ` · ${fmtNum(v.avg_hr)} bpm` : ""}</span>
-              </div>
-            ))}
-          </div>
-          {a.versions.length > 1 && <p className="hint" style={{ marginTop: "0.6rem" }}>Welche Quelle zählt, legst du unter Einstellungen → Datenquellen fest.</p>}
-        </section>
+        <div>
+          <Linked activityId={a.id} title="Quellen dieser Einheit" />
+          <p className="hint" style={{ marginTop: "-0.6rem" }}>Welche Quelle zählt, legst du unter Einstellungen → Datenquellen fest.</p>
+        </div>
       </div>
     </div>
   );

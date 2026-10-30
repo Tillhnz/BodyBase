@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -307,6 +308,97 @@ def get_activity(activity_id: int, user: User = Depends(current_user), db: Sessi
     if not out.get("details"):
         out["details"] = next((x.details for x in group if x.details), None)
     return out
+
+
+# ---------- Verknüpfen von Einheiten aus mehreren Quellen ----------
+
+def linked_info(db: Session, a: Activity) -> dict:
+    """Alles, was zu einer Einheit aus anderen Quellen bekannt ist, plus Vorschläge zum Verknüpfen."""
+    from ..store import LINK_WINDOW, overlap_ratio
+    primary = db.get(Activity, a.duplicate_of) if a.duplicate_of else a
+    group = [primary] + list(db.scalars(select(Activity).where(Activity.duplicate_of == primary.id)))
+    ids = {x.id for x in group}
+    filled = (primary.details or {}).get("filled") or {}
+    sources = [{"id": x.id, "source": x.source, "source_name": providers.name_of(x.source), "name": x.name,
+                "sport": x.sport, "start": x.start.isoformat() + "Z", "duration_s": x.duration_s, "avg_hr": x.avg_hr,
+                "max_hr": x.max_hr, "calories": x.calories, "load": x.load, "primary": x.id == primary.id,
+                "manual": bool((x.details or {}).get("link_to"))} for x in group]
+    cands = []
+    for c in db.scalars(select(Activity).where(Activity.user_id == a.user_id, Activity.start >= primary.start - LINK_WINDOW,
+                                               Activity.start <= primary.start + LINK_WINDOW, Activity.id.not_in(ids))):
+        if c.duplicate_of in ids:
+            continue
+        cands.append({"id": c.id, "source_name": providers.name_of(c.source), "name": c.name, "sport": c.sport,
+                      "start": c.start.isoformat() + "Z", "duration_s": c.duration_s, "avg_hr": c.avg_hr,
+                      "overlap": round(overlap_ratio(primary, c), 2)})
+    cands.sort(key=lambda c: -c["overlap"])
+    names = {k: ("Einzelmessungen Puls" if v == "heart_rate" else providers.name_of(v)) for k, v in filled.items()}
+    return {"activity_id": primary.id, "avg_hr": primary.avg_hr, "max_hr": primary.max_hr, "calories": primary.calories,
+            "load": primary.load, "hr_zones": (primary.details or {}).get("hr_zones"), "filled_from": names,
+            "sources": sources, "candidates": cands[:6]}
+
+
+class LinkIn(BaseModel):
+    target_id: int
+
+
+@router.post("/activities/{activity_id}/link")
+def link_activity(activity_id: int, data: LinkIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Eine Einheit von Hand einer anderen zuordnen (z. B. WHOOP-Workout zum Hevy-Training)."""
+    from ..store import link_duplicates
+    a, t = db.get(Activity, activity_id), db.get(Activity, data.target_id)
+    if not a or not t or a.user_id != user.id or t.user_id != user.id or a.id == t.id:
+        raise HTTPException(404, "Aktivität nicht gefunden")
+    target = db.get(Activity, t.duplicate_of) if t.duplicate_of else t
+    d = dict(a.details or {})
+    d.pop("unlink", None)
+    d["link_to"] = target.id
+    a.details = d
+    db.flush()
+    link_duplicates(db, user.id, a)
+    db.commit()
+    return linked_info(db, target)
+
+
+@router.post("/activities/{activity_id}/unlink")
+def unlink_activity(activity_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Eine Einheit aus ihrer Gruppe lösen; sie wird dann einzeln gezählt und nicht mehr automatisch verknüpft."""
+    from ..store import link_duplicates
+    a = db.get(Activity, activity_id)
+    if not a or a.user_id != user.id:
+        raise HTTPException(404, "Aktivität nicht gefunden")
+    keep = db.get(Activity, a.duplicate_of) if a.duplicate_of else None
+    if keep is None:  # die Hauptquelle selbst lösen: alle anderen lösen sich von ihr
+        others = list(db.scalars(select(Activity).where(Activity.duplicate_of == a.id)))
+        if not others:
+            return linked_info(db, a)
+        keep, a = a, None
+        for o in others:
+            d = dict(o.details or {})
+            d.pop("link_to", None)
+            d["unlink"] = True
+            o.details = d
+            o.duplicate_of = None
+        db.flush()
+        link_duplicates(db, user.id, others[0])
+        db.commit()
+        return linked_info(db, keep)
+    d = dict(a.details or {})
+    d.pop("link_to", None)
+    d["unlink"] = True
+    a.details = d
+    db.flush()
+    link_duplicates(db, user.id, a)
+    db.commit()
+    return linked_info(db, keep)
+
+
+@router.get("/activities/{activity_id}/linked")
+def activity_linked(activity_id: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    a = db.get(Activity, activity_id)
+    if not a or a.user_id != user.id:
+        raise HTTPException(404, "Aktivität nicht gefunden")
+    return linked_info(db, a)
 
 
 @router.delete("/activities/{activity_id}", status_code=204)

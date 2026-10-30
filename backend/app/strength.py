@@ -363,6 +363,11 @@ def workout_dict(db: Session, w: Workout, full: bool = False, names: dict | None
         b["best"] = _best_set_text(b["sets"], b["kind"])
     if full:
         out["exercises"] = blocks
+        act = db.scalar(select(Activity).where(Activity.user_id == w.user_id, Activity.source == SOURCE,
+                                               Activity.source_id == f"w{w.id}"))
+        if act is not None:
+            from .routers.data import linked_info
+            out["linked"] = linked_info(db, act)
     else:
         out["exercises"] = [{"exercise_id": b["exercise_id"], "name": b["name"], "sets": len([s for s in b["sets"] if s["type"] != "warmup"]),
                              "best": b["best"]} for b in blocks]

@@ -247,3 +247,51 @@ def test_import_routines_csv(client, auth):
     assert push["exercises"][0]["rest_s"] == 120
     again = client.post("/api/strength/import", files={"file": ("routines.csv", ROUTINE_CSV.encode(), "text/csv")}, headers=auth).json()
     assert again["created"] == 0 and again["updated"] == 2
+
+
+def test_link_whoop_to_strength_workout(client, auth, db):
+    from app.models import User
+    from app.store import ActivityIn, Writer
+    bench = _ex(client, auth, "Bankdrücken (Langhantel)")
+    t0 = datetime(2026, 8, 3, 16, 0)
+    w = client.post("/api/strength/workouts", json=_workout(t0, 70, ex_id=bench["id"]), headers=auth).json()
+    assert w["linked"]["avg_hr"] is None
+    me = client.get("/api/me", headers=auth).json()
+    u = db.get(User, me["id"])
+    wr = Writer(db, u.id, "whoop")
+    # WHOOP erkennt das Training 12 Minuten später und etwas kürzer
+    wr.activity(ActivityIn(source_id="wh1", start=t0 + timedelta(minutes=12), sport_raw="weightlifting", duration_s=40 * 60,
+                           avg_hr=118, max_hr=161, calories=310, load=9.4,
+                           details={"hr_zones": [60, 600, 900, 600, 240, 0]}))
+    # ein Spaziergang am Abend gehört nicht dazu
+    wr.activity(ActivityIn(source_id="wh2", start=t0 + timedelta(hours=3), sport_raw="walking", duration_s=1800, avg_hr=95))
+    wr.flush()
+    full = client.get(f"/api/strength/workouts/{w['id']}", headers=auth).json()
+    linked = full["linked"]
+    assert linked["avg_hr"] == 118 and linked["load"] == 9.4 and linked["hr_zones"][2] == 900
+    assert linked["filled_from"]["avg_hr"] == "WHOOP"
+    assert {s["source"] for s in linked["sources"]} == {"strength", "whoop"}
+    whoop_id = next(s["id"] for s in linked["sources"] if s["source"] == "whoop")
+    walk = next(c for c in linked["candidates"] if c["sport"] == "walk")
+
+    # Lösen: Werte verschwinden wieder
+    r = client.post(f"/api/activities/{whoop_id}/unlink", headers=auth).json()
+    assert r["avg_hr"] is None and len(r["sources"]) == 1
+    # automatischer Abgleich verknüpft es nicht erneut
+    wr.activity(ActivityIn(source_id="wh1", start=t0 + timedelta(minutes=12), sport_raw="weightlifting", duration_s=40 * 60,
+                           avg_hr=118))
+    wr.flush()
+    assert client.get(f"/api/strength/workouts/{w['id']}", headers=auth).json()["linked"]["avg_hr"] is None
+    # von Hand verknüpfen
+    r = client.post(f"/api/activities/{walk['id']}/link", json={"target_id": r["activity_id"]}, headers=auth).json()
+    assert r["avg_hr"] == 95 and any(s["manual"] for s in r["sources"])
+
+
+def test_overlap_rules():
+    from app.models import Activity
+    from app.store import _similar
+    base = datetime(2026, 8, 3, 16, 0)
+    a = Activity(start=base, duration_s=3600, sport="strength", source="strength")
+    assert _similar(a, Activity(start=base + timedelta(minutes=10), duration_s=2700, sport="cardio", source="whoop"))
+    assert not _similar(a, Activity(start=base + timedelta(minutes=10), duration_s=2700, sport="ride", source="whoop"))
+    assert not _similar(a, Activity(start=base + timedelta(minutes=50), duration_s=3600, sport="strength", source="whoop"))

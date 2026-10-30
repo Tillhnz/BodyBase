@@ -180,6 +180,10 @@ class Writer:
             setattr(row, attr, _num(getattr(a, attr)))
         row.duration_s = int(_num(a.duration_s)) if _num(a.duration_s) is not None else None
         row.moving_s = int(_num(a.moving_s)) if _num(a.moving_s) is not None else None
+        filled = (row.details or {}).get("filled") or {}
+        own = [k for k in filled if k in FILL_ATTRS and getattr(a, k, None) is not None]
+        if own:  # die Quelle liefert den Wert inzwischen selbst
+            row.details = {**row.details, "filled": {k: v for k, v in filled.items() if k not in own}}
         has_track = (row.details or {}).get("track") == "ok"
         if a.polyline and not has_track:
             row.polyline = a.polyline  # eine nachgeholte, genaue Strecke nicht durch die Vorschau ersetzen
@@ -235,25 +239,80 @@ class Writer:
 START_TOLERANCE_S = 300
 
 
+LINK_WINDOW = timedelta(hours=4)
+MIN_OVERLAP = 0.6  # Anteil der kürzeren Einheit, der sich überschneiden muss
+# Sportarten, die für dieselbe Einheit stehen können (Uhren erkennen Krafttraining oft als „Workout“ oder „Sonstiges“)
+COMPATIBLE = {
+    "strength": {"strength", "cardio", "other", "yoga"}, "cardio": {"cardio", "strength", "other", "yoga", "team"},
+    "other": {"other", "strength", "cardio", "yoga", "climb"}, "yoga": {"yoga", "strength", "cardio", "other"},
+    "climb": {"climb", "other", "hike"}, "hike": {"hike", "walk", "climb"}, "walk": {"walk", "hike"},
+}
+FILL_ATTRS = ("avg_hr", "max_hr", "calories", "elevation_m", "avg_power", "distance_m", "load")
+
+
+def _end(a: Activity) -> datetime | None:
+    d = a.duration_s or a.moving_s
+    return a.start + timedelta(seconds=d) if d else None
+
+
+def overlap_ratio(a: Activity, b: Activity) -> float:
+    ea, eb = _end(a), _end(b)
+    if not ea or not eb:
+        return 0.0
+    inter = (min(ea, eb) - max(a.start, b.start)).total_seconds()
+    shorter = min((ea - a.start).total_seconds(), (eb - b.start).total_seconds())
+    return max(0.0, inter) / shorter if shorter > 0 else 0.0
+
+
+def _compatible(a: Activity, b: Activity) -> bool:
+    if a.sport == b.sport:
+        return True
+    return b.sport in COMPATIBLE.get(a.sport, {a.sport}) or a.sport in COMPATIBLE.get(b.sport, {b.sport})
+
+
 def _similar(a: Activity, b: Activity) -> bool:
-    if abs((a.start - b.start).total_seconds()) > START_TOLERANCE_S:
-        return False
+    """Gleiche Einheit? Fast gleicher Start und ähnliche Dauer, oder zeitlich überwiegend deckungsgleich und
+    passende Sportart (z. B. Hevy-Krafttraining und das von WHOOP erkannte „Weightlifting“)."""
     da, db_ = a.duration_s or a.moving_s, b.duration_s or b.moving_s
-    if da and db_ and abs(da - db_) > max(300, 0.25 * max(da, db_)):
-        return False
-    return True
+    if abs((a.start - b.start).total_seconds()) <= START_TOLERANCE_S:
+        if not (da and db_ and abs(da - db_) > max(300, 0.25 * max(da, db_))):
+            return True
+    return _compatible(a, b) and overlap_ratio(a, b) >= MIN_OVERLAP
+
+
+def _flags(a: Activity) -> dict:
+    return a.details or {}
 
 
 def link_duplicates(db: Session, user_id: int, row: Activity) -> None:
-    """Dieselbe Einheit aus mehreren Quellen (Garmin, Strava, Apple Health …) wird nur einmal gezählt.
-    Die Quelle mit dem höchsten Rang bleibt sichtbar, die anderen verweisen auf sie."""
-    window = timedelta(seconds=START_TOLERANCE_S)
+    """Dieselbe Einheit aus mehreren Quellen (Garmin, Strava, WHOOP, Hevy, Apple Health …) wird nur einmal gezählt.
+    Die Quelle mit dem höchsten Rang bleibt sichtbar, die anderen verweisen auf sie. Fehlende Werte der Hauptquelle
+    (Puls, Kalorien, Belastung …) werden aus den anderen ergänzt. Von Hand gelöste oder verknüpfte Einheiten
+    behalten ihre Zuordnung (details.unlink, details.link_to)."""
     near = db.scalars(select(Activity).where(
-        Activity.user_id == user_id, Activity.start >= row.start - window, Activity.start <= row.start + window)).all()
-    group = [a for a in near if a.id == row.id or (_similar(a, row) and a.source != row.source)]
+        Activity.user_id == user_id, Activity.start >= row.start - LINK_WINDOW, Activity.start <= row.start + LINK_WINDOW)).all()
+    by_id = {a.id: a for a in near}
+    manual_target = _flags(row).get("link_to")
+    if _flags(row).get("unlink"):
+        group = [row]
+    elif manual_target and manual_target in by_id:
+        target = by_id[manual_target]
+        group = [target] + [a for a in near if a.id != target.id and (_flags(a).get("link_to") == target.id
+                                                                     or (a.id == row.id))]
+    else:
+        group = [a for a in near if a.id == row.id or (
+            a.source != row.source and not _flags(a).get("unlink") and not _flags(a).get("link_to") and _similar(a, row))]
+        # von Hand an ein Mitglied gehängte Einheiten gehören dazu
+        ids = {a.id for a in group}
+        group += [a for a in near if a.id not in ids and _flags(a).get("link_to") in ids]
+    previous_primary = db.get(Activity, row.duplicate_of) if row.duplicate_of else None
     if len(group) <= 1:
         if row.duplicate_of is not None:
             row.duplicate_of = None
+        _refill(db, row, [])
+        if previous_primary is not None and previous_primary.id != row.id:
+            others = list(db.scalars(select(Activity).where(Activity.duplicate_of == previous_primary.id, Activity.id != row.id)))
+            _refill(db, previous_primary, others)
         return
     user = db.get(User, user_id)
     order = priority_for(user, "_activities")
@@ -262,13 +321,44 @@ def link_duplicates(db: Session, user_id: int, row: Activity) -> None:
     primary.duplicate_of = None
     for a in group[1:]:
         a.duplicate_of = primary.id
-    # Fehlende Angaben der Hauptquelle aus den anderen ergänzen (z. B. Puls aus der Uhr, Name aus Strava)
-    for attr in ("avg_hr", "max_hr", "calories", "elevation_m", "avg_power", "distance_m", "load"):
+    _refill(db, primary, group[1:])
+
+
+def _refill(db: Session, primary: Activity, others: list) -> None:
+    """Ergänzte Werte neu berechnen: erst die früher ergänzten entfernen, dann aus den aktuellen Partnern füllen,
+    zuletzt Puls aus Einzelmessungen (z. B. Apple Watch) im Zeitraum der Einheit."""
+    details = dict(primary.details or {})
+    filled = dict(details.get("filled") or {})
+    for attr in filled:
+        if attr in FILL_ATTRS:
+            setattr(primary, attr, None)
+    filled = {}
+    for attr in FILL_ATTRS:
         if getattr(primary, attr) is None:
-            for a in group[1:]:
+            for a in others:
                 if getattr(a, attr) is not None:
                     setattr(primary, attr, getattr(a, attr))
+                    filled[attr] = a.source
                     break
+    zones = next((a.details.get("hr_zones") for a in others if a.details and a.details.get("hr_zones")), None)
+    if zones and not (details.get("hr_zones") and "hr_zones" not in (details.get("filled") or {})):
+        details["hr_zones"] = zones
+        filled["hr_zones"] = next(a.source for a in others if a.details and a.details.get("hr_zones"))
+    elif "hr_zones" in (details.get("filled") or {}) and not zones:
+        details.pop("hr_zones", None)
+    end = _end(primary)
+    if primary.avg_hr is None and end is not None:
+        rows = db.execute(select(Sample.value).where(
+            Sample.user_id == primary.user_id, Sample.metric == "heart_rate", Sample.ts >= primary.start, Sample.ts <= end)).all()
+        vals = [r[0] for r in rows if r[0]]
+        if len(vals) >= 3:
+            primary.avg_hr = round(sum(vals) / len(vals), 1)
+            primary.max_hr = primary.max_hr or max(vals)
+            filled["avg_hr"] = "heart_rate"
+            filled.setdefault("max_hr", "heart_rate")
+    if filled or details.get("filled"):
+        details["filled"] = filled
+        primary.details = details
 
 
 # ---------- Auswertung ----------

@@ -5,6 +5,7 @@ import { confirmDialog, Loading, toast } from "../components/feedback.jsx";
 import { EmptyState, Kpi, useAsync } from "../components/ui.jsx";
 import { fmtNum } from "../fmt.js";
 import BodyMap, { valuesFromBlocks } from "../components/BodyMap.jsx";
+import Linked from "../components/Linked.jsx";
 import BlockEditor from "./BlockEditor.jsx";
 import {
   e1rm, fmtClock, fmtKg, fmtVolume, fromDraftBlock, loadExercises, setText, startWorkout, toDraftBlock, useExercises,
@@ -120,7 +121,10 @@ export default function WorkoutDetail() {
         <Kpi label="Sätze" value={fmtNum(w.sets)} />
         <Kpi label="Wiederholungen" value={fmtNum(w.reps)} />
         <Kpi label="Rekorde" value={fmtNum(w.prs.length)} />
+        {w.linked?.avg_hr ? <Kpi label="Ø Puls" value={fmtNum(w.linked.avg_hr)} unit="bpm" sub={w.linked.filled_from?.avg_hr ? `von ${w.linked.filled_from.avg_hr}` : null} /> : null}
+        {w.linked?.calories ? <Kpi label="Kalorien" value={fmtNum(w.linked.calories)} unit="kcal" sub={w.linked.filled_from?.calories ? `von ${w.linked.filled_from.calories}` : null} /> : null}
       </div>
+      {w.linked && <Linked initial={w.linked} title="Puls & Daten aus anderen Quellen" onChange={(l) => setW({ ...w, linked: l })} />}
       <section className="panel">
         <div className="panel-head"><h2>Trainierte Muskeln</h2><span className="tiny muted">Arbeitssätze, Nebenmuskeln zählen halb</span></div>
         <BodyMap values={valuesFromBlocks(w.exercises)} unit="Sätze" />
