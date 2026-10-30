@@ -776,3 +776,4 @@ details > summary { list-style-position: inside; }
   .habit-days { grid-template-columns: repeat(14, minmax(0, 1fr)); }
   .habit-days .habit-day:nth-child(-n + 14) { display: none; }
 }
+.home-habits { margin-bottom: 1.25rem; }

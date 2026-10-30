@@ -74,6 +74,10 @@ export default function Home({ user }) {
           <button className="btn primary" onClick={() => navigate("/sources")}>Erste Quelle verbinden</button>
           <button className="btn" onClick={loadDemo} disabled={busy}>Mit Beispieldaten ausprobieren</button>
         </EmptyState>
+        <div className="grid-2 home-habits" style={{ marginTop: "1.25rem" }}>
+          <HabitsToday onChanged={() => setTick((n) => n + 1)} />
+          <Coach refreshKey={tick} compact />
+        </div>
       </>
     );
   }
@@ -160,14 +164,14 @@ export default function Home({ user }) {
         </div>
       </div>
 
+      <div className="grid-2 home-habits">
+        <HabitsToday onChanged={() => setTick((n) => n + 1)} />
+        <Coach refreshKey={tick} compact />
+      </div>
+
       <div className="section-title"><h2>Werte</h2><Link className="link small" to="/health">Alle Messgrößen</Link></div>
       <div className="metric-grid">
         {(summary || []).map((item) => <MetricCard key={item.key} item={item} to={`/metric/${item.key}`} />)}
-      </div>
-
-      <div className="grid-2">
-        <HabitsToday onChanged={() => setTick((n) => n + 1)} />
-        <Coach refreshKey={tick} compact />
       </div>
 
       <BodyLoadPanel refreshKey={tick} />
