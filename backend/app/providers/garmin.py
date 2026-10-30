@@ -8,9 +8,10 @@ import threading
 import time
 from datetime import date, timedelta
 
+from .. import tracks
 from ..store import ActivityIn, SleepIn
 from ..timeutil import parse_date, parse_iso, today
-from .base import AuthError, Field, Provider, SyncError, num
+from .base import AuthError, Field, Provider, RateLimited, SyncError, num
 
 log = logging.getLogger("bodybase.garmin")
 
@@ -90,8 +91,27 @@ class Garmin(Provider):
 
     # ---------- Abgleich ----------
 
+    has_tracks = True
+
+    def track(self, ctx, row):
+        client = getattr(ctx, "garmin_client", None)
+        if client is None:
+            raise SyncError("Garmin ist gerade nicht angemeldet.")
+        fmt = getattr(client, "ActivityDownloadFormat", None)
+        try:
+            data = client.download_activity(row.source_id, dl_fmt=fmt.ORIGINAL) if fmt else client.download_activity(row.source_id)
+        except Exception as e:
+            text = str(e)
+            if "429" in text or "Too Many" in text:
+                raise RateLimited("Garmin begrenzt gerade die Anfragen.") from e
+            if "404" in text:
+                return None
+            raise SyncError(f"Garmin-Datei nicht geladen: {text[:120]}") from e
+        return tracks.from_file("garmin.zip", data) if data else None
+
     def sync(self, ctx):
         client = self._client(ctx)
+        ctx.garmin_client = client
         w = ctx.writer
         try:
             start, end = ctx.since_date, today()

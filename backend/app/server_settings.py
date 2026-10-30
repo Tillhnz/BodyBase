@@ -16,6 +16,8 @@ from .models import ServerSetting
 # Optionen, die der Administrator in der Oberfläche ändern darf: Name -> (Typ, Grenzen)
 OPTIONS = {
     "public_url": ("url", 300),
+    "map_tile_url": ("str", 300),
+    "carto_api_key": ("str", 128),
     "allow_registration": ("bool", None),
     "frame_ancestors": ("str", 500),
     "sync_interval_minutes": ("int", (15, 1440)),

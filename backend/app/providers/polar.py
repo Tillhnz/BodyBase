@@ -1,3 +1,4 @@
+from .. import tracks
 from ..store import ActivityIn, SleepIn
 from ..timeutil import parse_date, parse_iso
 from .base import Field, OAuthSpec, Provider, iso_duration_s, num
@@ -31,6 +32,15 @@ class Polar(Provider):
         ctx.auth.update(token)
         ctx.post(f"{API}/users", json={"member-id": f"bodybase-{ctx.user.id}"}, ok_status=(409,), expect_json=False)
         return f"Polar-Nutzer {uid}" if uid else None
+
+    has_tracks = True
+
+    def track(self, ctx, row):
+        data = tracks.download(ctx, f"{API}/exercises/{row.source_id}/fit", headers={"Accept": "*/*"})
+        if data:
+            return tracks.from_file("polar.fit", data)
+        data = tracks.download(ctx, f"{API}/exercises/{row.source_id}/gpx", headers={"Accept": "application/gpx+xml"})
+        return tracks.from_file("polar.gpx", data) if data else None
 
     def sync(self, ctx):
         w = ctx.writer

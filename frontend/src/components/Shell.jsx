@@ -7,6 +7,7 @@ import { BrandMark } from "./ui.jsx";
 export const NAV = [
   { to: "/", label: "Übersicht", short: "Start", end: true, icon: "M4 12 A8 8 0 1 1 12 20 M12 8 A4 4 0 1 1 8 12 M12 12 H12.01" },
   { to: "/activities", label: "Aktivitäten", short: "Training", icon: "M13 4 A1.6 1.6 0 1 0 13.01 4 M8 21 L11 14 L14 16 V21 M6 11 L9 8 L13 8.5 L16 12 L19 13" },
+  { to: "/strength", label: "Kraft", icon: "M4 9 V15 M7 7 V17 M17 7 V17 M20 9 V15 M7 12 H17" },
   { to: "/sleep", label: "Schlaf", icon: "M20 14.5 A8 8 0 1 1 9.5 4 A6.5 6.5 0 0 0 20 14.5 Z" },
   { to: "/health", label: "Gesundheit", short: "Körper", icon: "M12 20 C6 16 3 12.5 3 9 A4.5 4.5 0 0 1 12 6.5 A4.5 4.5 0 0 1 21 9 C21 12.5 18 16 12 20 Z M7 11 H9.5 L11 8.5 L13 13 L14.5 11 H17" },
   { to: "/trends", label: "Trends", desk: true, icon: "M3 17 L9 11 L13 15 L21 7 M15 7 H21 V13" },

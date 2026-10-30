@@ -252,6 +252,10 @@ function Server() {
           <label>Erster Abgleich holt … Tage<input inputMode="numeric" value={v.backfill_days} onChange={(e) => setV({ ...v, backfill_days: e.target.value })} />
             <span className="hint">Wie weit eine neue Verbindung zurückgeht. Später per „Alles neu holen“ änderbar.</span></label>
           <label>Zeitzone<input value={v.timezone} onChange={(e) => setV({ ...v, timezone: e.target.value })} placeholder="Europe/Berlin" /></label>
+          <label>Karten: CARTO-Schlüssel (optional)<input value={v.carto_api_key || ""} onChange={(e) => setV({ ...v, carto_api_key: e.target.value })} placeholder="leer = OpenStreetMap" />
+            <span className="hint">Für die dunkle CARTO-Karte, kostenlos unter carto.com/basemaps. Ohne Schlüssel kommt OpenStreetMap (im dunklen Design abgedunkelt).</span></label>
+          <label>Karten: eigene Kachel-Adresse (optional)<input value={v.map_tile_url || ""} onChange={(e) => setV({ ...v, map_tile_url: e.target.value })} placeholder="https://…/{z}/{x}/{y}.png" />
+            <span className="hint">Hat Vorrang vor CARTO und OpenStreetMap. Muss mit https:// beginnen und {"{z}"}, {"{x}"}, {"{y}"} enthalten.</span></label>
           <label>In andere Seiten einbetten<input value={v.frame_ancestors} onChange={(e) => setV({ ...v, frame_ancestors: e.target.value })} placeholder="https://ha.example.de" />
             <span className="hint">Adressen, die BodyBase einbetten dürfen (z. B. Home Assistant), mit Leerzeichen getrennt.</span></label>
         </div>

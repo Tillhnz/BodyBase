@@ -33,6 +33,8 @@ services:
       FRAME_ANCESTORS: ${FRAME_ANCESTORS:-}
       COOKIE_SAMESITE: ${COOKIE_SAMESITE:-strict}
       UPDATER_URL: ${UPDATER_URL:-http://updater:9000}
+      MAP_TILE_URL: ${MAP_TILE_URL:-}
+      CARTO_API_KEY: ${CARTO_API_KEY:-}
     volumes:
       - app_data:/data
 

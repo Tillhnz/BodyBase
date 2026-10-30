@@ -162,7 +162,8 @@ function SourceDialog({ p, user, onClose, onChange, jobs }) {
         {p.kind === "oauth" && <OAuthConnect p={p} user={user} connected={!!c} />}
         {(p.kind === "apikey" || p.kind === "login") && <KeyConnect p={p} c={c} onChange={onChange} />}
         {p.kind === "push" && <PushSetup p={p} />}
-        {(p.kind === "file" || p.key === "apple_health") && <FileImport p={p} onChange={onChange} jobs={jobs} />}
+        {p.key === "strength" && <div className="actions"><Link className="btn primary" to="/strength">Zum Krafttraining</Link></div>}
+        {(p.kind === "file" || p.key === "apple_health") && p.key !== "strength" && <FileImport p={p} onChange={onChange} jobs={jobs} />}
         {p.note && <div className="notice" style={{ margin: 0 }}><p className="small">{p.note}</p></div>}
         {p.website && <p className="small" style={{ margin: 0 }}><a href={p.website} target="_blank" rel="noreferrer noopener">{p.website.replace(/^https?:\/\//, "")}</a></p>}
       </div>

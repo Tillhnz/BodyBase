@@ -1,3 +1,4 @@
+from .. import tracks
 from ..store import ActivityIn
 from ..timeutil import parse_date, parse_iso
 from .base import Field, Provider, SyncError, num
@@ -35,6 +36,26 @@ class Intervals(Provider):
         if not a:
             raise SyncError("intervals.icu hat kein Konto zu diesem Schlüssel geliefert.")
         return a.get("name") or a.get("id")
+
+    has_tracks = True
+
+    def track(self, ctx, row):
+        data = ctx.get(f"{API}/activity/{row.source_id}/streams", auth="basic", basic=self._basic(ctx), ok_status=(404, 422),
+                       params={"types": "time,latlng,altitude,heartrate,distance,watts,cadence"})
+        if not isinstance(data, list):
+            return None
+        s, lng = {}, None
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            s[item.get("type")] = item.get("data")
+            if item.get("type") == "latlng":
+                lng = item.get("data2")  # intervals.icu: Breite in data, Länge in data2
+        lat = s.get("latlng")
+        if lat and lng is None and isinstance(lat[0] if lat else None, (list, tuple)):
+            lat, lng = [p[0] if p else None for p in lat], [p[1] if p else None for p in lat]
+        return tracks.from_streams(row.start, s.get("time"), lat, lng, s.get("altitude"), s.get("heartrate"),
+                                   s.get("distance"), s.get("watts"), s.get("cadence"))
 
     def sync(self, ctx):
         w = ctx.writer

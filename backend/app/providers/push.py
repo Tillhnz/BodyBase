@@ -74,6 +74,17 @@ class Csv(Provider):
     ]
 
 
+class StrengthLog(Provider):
+    key = "strength"
+    name = "Krafttraining"
+    kind = "file"
+    color = "#f5a524"
+    initials = "KT"
+    delivers = ["workouts"]
+    summary = "Eigener Trainings-Tracker in BodyBase: Übungen, Sätze, Routinen, Rekorde. Übernimmt auch Exporte aus Hevy und Strong."
+    setup = ["Im Bereich „Kraft“ ein Training starten oder unter „Importieren“ den CSV-Export aus Hevy bzw. Strong hochladen."]
+
+
 class Manual(Provider):
     key = "manual"
     name = "Eigene Eingaben"

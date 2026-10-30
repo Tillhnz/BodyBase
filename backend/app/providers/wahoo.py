@@ -1,3 +1,4 @@
+from .. import tracks
 from ..store import ActivityIn
 from ..timeutil import parse_iso
 from .base import Field, OAuthSpec, Provider, num
@@ -44,6 +45,15 @@ class Wahoo(Provider):
         except Exception:
             return None
 
+    has_tracks = True
+
+    def track(self, ctx, row):
+        url = (row.details or {}).get("file_url")
+        if not url:
+            return None
+        data = tracks.download(ctx, url, auth="none")  # FIT-Datei liegt auf Wahoos Speicher, ohne Anmeldung
+        return tracks.from_file("wahoo.fit", data) if data else None
+
     def sync(self, ctx):
         page = 1
         while page <= 40:
@@ -70,4 +80,5 @@ def map_workout(wo: dict) -> ActivityIn:
         moving_s=num(s.get("duration_active_accum")), distance_m=num(s.get("distance_accum")),
         elevation_m=num(s.get("ascent_accum")), calories=num(s.get("calories_accum")), avg_hr=num(s.get("heart_rate_avg")),
         avg_power=num(s.get("power_avg")), load=num(s.get("training_stress_score")) if s.get("training_stress_score") else None,
+        details={"file_url": url} if (url := (s.get("file") or {}).get("url")) else None,
     )

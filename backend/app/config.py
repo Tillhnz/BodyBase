@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     backfill_days: int = 90  # so weit zurück holt die erste Synchronisierung Daten
     max_upload_mb: int = 4096  # Apple-Health-Export kann mehrere GB groß sein
     data_dir: str = "/data"
+    map_tile_url: str = ""  # eigene Kachel-URL mit {z}/{x}/{y}, leer = OpenStreetMap
+    carto_api_key: str = ""  # optional: dunkle CARTO-Karte
 
 
 settings = Settings()

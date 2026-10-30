@@ -122,6 +122,12 @@ class Provider:
     def sync(self, ctx: "SyncContext") -> None:
         raise NotImplementedError
 
+    has_tracks: bool = False  # liefert GPS-Strecke und Verlauf über track()
+
+    def track(self, ctx: "SyncContext", row) -> tuple | None:
+        """GPS-Strecke und Verlauf einer gespeicherten Aktivität holen (siehe tracks.py)."""
+        return None
+
     def disconnect(self, ctx: "SyncContext") -> None:
         """Optional: Zugang beim Anbieter widerrufen."""
         return None
@@ -146,6 +152,8 @@ class SyncContext:
         self.writer = Writer(db, user.id, provider.key) if user is not None else None
         self.backfill_days = backfill_days
         self.notes: list[str] = []
+        self.track_budget = 15  # Detailabrufe für GPS-Strecken je Abgleich (siehe tracks.py)
+        self.track_pending = 0
         self._dirty_auth = False
         last = self.cursor.get("last_success")
         now = utcnow()

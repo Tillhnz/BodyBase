@@ -1,3 +1,4 @@
+from .. import tracks
 from ..store import ActivityIn
 from ..timeutil import parse_iso
 from .base import Field, OAuthSpec, Provider, epoch, num
@@ -30,6 +31,21 @@ class Strava(Provider):
         name = " ".join(x for x in (athlete.get("firstname"), athlete.get("lastname")) if x)
         return name or None
 
+    has_tracks = True
+
+    def track(self, ctx, row):
+        s = ctx.get(f"{API}/activities/{row.source_id}/streams", ok_status=(404,),
+                    params={"keys": "time,latlng,altitude,heartrate,distance,watts,cadence", "key_by_type": "true"})
+        if not isinstance(s, dict):
+            return None
+
+        def g(k):
+            v = s.get(k)
+            return v.get("data") if isinstance(v, dict) else None
+        lat, lng = _pairs(g("latlng"))
+        return tracks.from_streams(row.start, g("time"), lat, lng, g("altitude"), g("heartrate"), g("distance"),
+                                   g("watts"), g("cadence"))
+
     def sync(self, ctx):
         after = epoch(ctx.since)
         page = 1
@@ -59,3 +75,9 @@ def map_activity(a: dict) -> ActivityIn:
         load=num(a.get("suffer_score")),
         polyline=(a.get("map") or {}).get("summary_polyline") or None,
     )
+
+
+def _pairs(ll):
+    lat = [p[0] if isinstance(p, (list, tuple)) and len(p) == 2 else None for p in ll or []]
+    lng = [p[1] if isinstance(p, (list, tuple)) and len(p) == 2 else None for p in ll or []]
+    return (lat, lng) if ll else (None, None)

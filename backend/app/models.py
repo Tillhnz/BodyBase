@@ -184,3 +184,92 @@ class ImportJob(Base):
     counts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+# ---------- Krafttraining (eigener Tracker, wie Hevy) ----------
+
+class Exercise(Base):
+    """Übung. user_id leer = eingebaute Übung aus dem Katalog (strength_catalog.py)."""
+    __tablename__ = "exercises"
+    __table_args__ = (Index("ix_exercises_user", "user_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    key: Mapped[str | None] = mapped_column(String(60), nullable=True, unique=True)  # nur eingebaute
+    name: Mapped[str] = mapped_column(String(120))
+    aliases: Mapped[list | None] = mapped_column(JSON, nullable=True)  # andere Namen (Hevy, Strong, Englisch)
+    equipment: Mapped[str] = mapped_column(String(20), default="other")
+    primary: Mapped[str] = mapped_column(String(20), default="other")
+    secondary: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    kind: Mapped[str] = mapped_column(String(20), default="weight_reps")  # weight_reps | bodyweight | weighted_bw | assisted_bw | duration | distance
+    archived: Mapped[bool | None] = mapped_column(Boolean, default=False, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Routine(Base):
+    __tablename__ = "routines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    folder: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    position: Mapped[int | None] = mapped_column(Integer, default=0, nullable=True)
+    # [{exercise_id, rest_s, notes, superset, sets: [{type, kg, reps, duration_s, distance_m}]}]
+    exercises: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class Workout(Base):
+    __tablename__ = "workouts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "source", "source_id", name="uq_workout"),
+        Index("ix_workouts_user_start", "user_id", "start"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    source: Mapped[str] = mapped_column(String(20), default="bodybase")  # bodybase | hevy | strong
+    source_id: Mapped[str] = mapped_column(String(120))
+    name: Mapped[str] = mapped_column(String(160))
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    start: Mapped[datetime] = mapped_column(DateTime)  # UTC
+    end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    day: Mapped[date] = mapped_column(Date)
+    routine_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Reihenfolge, Notizen, Pausenzeit und Supersätze je Übung: [{exercise_id, notes, rest_s, superset}]
+    layout: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    volume_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sets_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prs: Mapped[list | None] = mapped_column(JSON, nullable=True)  # bei diesem Training aufgestellte Rekorde
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class WorkoutSet(Base):
+    __tablename__ = "workout_sets"
+    __table_args__ = (Index("ix_wsets_user_ex", "user_id", "exercise_id", "start"),)
+
+    id: Mapped[int] = mapped_column(BigId, primary_key=True, autoincrement=True)
+    workout_id: Mapped[int] = mapped_column(ForeignKey("workouts.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(Integer)
+    exercise_id: Mapped[int] = mapped_column(Integer)
+    start: Mapped[datetime] = mapped_column(DateTime)  # Beginn des Trainings, für schnelle Verläufe
+    ex_pos: Mapped[int] = mapped_column(Integer)
+    pos: Mapped[int] = mapped_column(Integer)
+    type: Mapped[str] = mapped_column(String(10), default="normal")  # normal | warmup | failure | drop
+    kg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rpe: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class ActiveWorkout(Base):
+    """Laufendes Training, damit es Neuladen, Handywechsel und Funklöcher im Studio übersteht."""
+    __tablename__ = "active_workouts"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

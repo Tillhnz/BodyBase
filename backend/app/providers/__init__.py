@@ -10,7 +10,7 @@ from .intervals import Intervals
 from .nightscout import Nightscout
 from .oura import Oura
 from .polar import Polar
-from .push import Api, AppleHealth, Csv, Files, HealthConnect, Manual
+from .push import Api, AppleHealth, Csv, Files, HealthConnect, Manual, StrengthLog
 from .strava import Strava
 from .suunto import Suunto
 from .wahoo import Wahoo
@@ -19,7 +19,7 @@ from .withings import Withings
 
 _ALL: list[Provider] = [
     Garmin(), Strava(), AppleHealth(), Withings(), Fitbit(), Polar(), Oura(), Whoop(), Suunto(), Wahoo(), Intervals(),
-    Concept2(), Hevy(), HealthConnect(), HomeAssistant(), Nightscout(), Dexcom(), Api(), Files(), Csv(), Manual(),
+    Concept2(), Hevy(), HealthConnect(), HomeAssistant(), Nightscout(), Dexcom(), StrengthLog(), Api(), Files(), Csv(), Manual(),
 ]
 PROVIDERS: dict[str, Provider] = {p.key: p for p in _ALL}
 

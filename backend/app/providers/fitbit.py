@@ -1,3 +1,4 @@
+from .. import tracks
 from ..store import ActivityIn, SleepIn
 from ..timeutil import parse_date, parse_iso
 from .base import Field, OAuthSpec, Provider, num
@@ -23,7 +24,7 @@ class Fitbit(Provider):
     app_fields = [Field("client_id", "OAuth 2.0 Client ID"), Field("client_secret", "Client Secret", "password", secret=True)]
     oauth = OAuthSpec(
         "https://www.fitbit.com/oauth2/authorize", f"{API}/oauth2/token",
-        ["activity", "heartrate", "sleep", "weight", "profile", "oxygen_saturation", "respiratory_rate", "cardio_fitness", "temperature"],
+        ["activity", "heartrate", "sleep", "weight", "profile", "oxygen_saturation", "respiratory_rate", "cardio_fitness", "temperature", "location"],
         pkce=True, token_auth="basic",
     )
     note = "Fitbit erlaubt 150 Anfragen pro Stunde. Der erste Abgleich großer Zeiträume verteilt sich daher auf mehrere Durchläufe."
@@ -38,6 +39,15 @@ class Fitbit(Provider):
     def _series(self, ctx, path: str, chunk: int):
         for a, b in ctx.days(chunk):
             yield ctx.get(f"{API}{path.format(start=a.isoformat(), end=b.isoformat())}") or {}
+
+    has_tracks = True
+
+    def track(self, ctx, row):
+        link = (row.details or {}).get("tcx")
+        if not link:
+            return None
+        data = tracks.download(ctx, link if link.startswith("http") else f"{API}/1/user/-/activities/{row.source_id}.tcx")
+        return tracks.from_file("fitbit.tcx", data) if data else None
 
     def sync(self, ctx):
         w = ctx.writer
@@ -146,4 +156,5 @@ def map_activity(a: dict) -> ActivityIn:
         elevation_m=num(a.get("elevationGain")),
         calories=num(a.get("calories")),
         avg_hr=num(a.get("averageHeartRate")),
+        details={"tcx": a["tcxLink"]} if a.get("tcxLink") else None,
     )

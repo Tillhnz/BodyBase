@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from sqlalchemy import delete, select, update
 
-from . import audit, crypto, providers, server_settings
+from . import audit, crypto, providers, server_settings, tracks
 from .config import settings
 from .database import SessionLocal
 from .models import Connection, SyncRun, User
@@ -64,6 +64,8 @@ def run_connection(conn_id: int, trigger: str = "auto", client=None) -> dict:
             ok, message = True, None
             try:
                 provider.sync(ctx)
+                ctx.writer.flush()
+                tracks.backfill(ctx)
                 counts = ctx.writer.flush()
                 conn.status = "ok"
                 conn.last_error = None

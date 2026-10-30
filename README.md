@@ -7,6 +7,8 @@ Der Kern, an dem alle deine Fitness- und Gesundheitsdaten zusammenkommen: Uhr, R
 - **Tageskern auf der Startseite:** Ringe für Bewegung, Schlaf, Erholung und Herz, dazu die wichtigsten Werte des Tages mit Vergleich zu deinem 30-Tage-Schnitt.
 - **Ein Wert, viele Quellen:** Liefern Garmin und Withings beide ein Gewicht, entscheidet eine Rangfolge pro Kategorie, welche Quelle zählt. Doppelte Aktivitäten (Strava + Garmin + intervals.icu) werden erkannt und zusammengeführt.
 - **Bereiche:** Aktivitäten (mit Strecke, Puls, Leistung, Karte), Schlaf (Phasen, Effizienz, Regelmäßigkeit), Gesundheit (Gewicht, Körperfett, Blutdruck, Glukose, SpO₂ …) und Trends mit frei kombinierbaren Werten.
+- **Krafttraining wie in Hevy:** Trainings live im Studio eintragen (Sätze abhaken, Werte vom letzten Mal, Aufwärm-, Drop- und Versagenssätze, Supersätze, Pausentimer mit Ton und Vibration, Bildschirm bleibt an), Routinen planen, über 100 Übungen mit Muskelgruppen plus eigene. Auswertungen pro Übung (schwerstes Gewicht, geschätztes 1RM, bester Satz, Volumen, Rekorde nach Wiederholungen) und insgesamt (Wochenverlauf, Muskelverteilung, Kalender, Serie, Rekorde). Bisherige Daten aus Hevy oder Strong per CSV-Export übernehmen.
+- **Karten mit GPS-Strecke:** Jede Aktivität mit Strecke zeigt eine echte Karte (OpenStreetMap, optional dunkle CARTO-Karte). Höhe, Puls, Tempo und Leistung sind mit der Karte verknüpft: Fährst du mit der Maus über das Diagramm, wandert ein Punkt über die Strecke. Die Strecken holt BodyBase von Strava, Garmin, Polar, Suunto, Wahoo, Fitbit, intervals.icu und aus Apple Health (Export und Health Auto Export mit Routen).
 - **Automatischer Abgleich** aller Verbindungen im Hintergrund (Standard: stündlich), beim ersten Verbinden 90 Tage rückwirkend. Zugänge der Anbieter liegen verschlüsselt in der Datenbank.
 - **Mehrere Personen:** Das erste Konto wird Administrator, weitere kommen per Einladung. Jede Person sieht nur ihre eigenen Daten.
 - **Updates und Sicherungen** per Klick unter Administration, Sicherungen optional mit age verschlüsselt und auf ein NAS.
@@ -29,7 +31,8 @@ Der Kern, an dem alle deine Fitness- und Gesundheitsdaten zusammenkommen: Uhr, R
 | Wahoo | OAuth | ELEMNT, KICKR, Wahoo-App |
 | intervals.icu | API-Schlüssel | Aktivitäten (auch COROS, Zwift …) und Wellness |
 | Concept2 Logbook | OAuth | RowErg, SkiErg, BikeErg |
-| Hevy | API-Schlüssel | Krafttraining mit Sätzen und Gewichten |
+| Krafttraining (eingebaut) | direkt in BodyBase | Übungen, Sätze, Routinen, Rekorde; Import aus Hevy- und Strong-CSV |
+| Hevy | API-Schlüssel (nur Hevy Pro) | Trainings laufen ins eingebaute Krafttraining |
 | Dexcom | OAuth | Glukose (CGM) |
 | Nightscout | Adresse + Token | Glukose (Libre, Dexcom … über xDrip, Juggluco) |
 | Home Assistant | Adresse + Token | Beliebige Sensoren, z. B. Waage über ESPHome |
@@ -75,6 +78,10 @@ bodybase url https://body.deine-domain.de
 ```
 
 Im Proxy Host unter *Advanced* für große Apple-Health-Exporte am besten `client_max_body_size 0;` eintragen.
+
+## Von Hevy umziehen
+
+Hevy gibt seine API nur mit Pro frei. Ohne Pro: In Hevy unter *Profil → Einstellungen → Daten exportieren* die `workouts.csv` erzeugen und in BodyBase unter **Kraft → Importieren** hochladen. Übungen werden automatisch zugeordnet (auch englische Namen), unbekannte als eigene Übungen angelegt. Ein erneuter Import aktualisiert statt zu verdoppeln. Der Export aus Strong funktioniert genauso.
 
 ## Befehle im Container
 

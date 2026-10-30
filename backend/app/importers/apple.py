@@ -143,6 +143,13 @@ def hae_sleep(p: dict) -> SleepIn | None:
                    rem_min=mins("rem"), light_min=mins("core"), awake_min=mins("awake"))
 
 
+def _f(v):
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def hae_workout(wo: dict) -> ActivityIn | None:
     start, end = parse_iso(wo.get("start")), parse_iso(wo.get("end"))
     if not start:
@@ -154,7 +161,19 @@ def hae_workout(wo: dict) -> ActivityIn | None:
     hr = wo.get("heartRate") or {}
     elev = wo.get("elevationUp") if isinstance(wo.get("elevationUp"), dict) else {}
     dist_km = convert("distance", _qty(dist, "qty"), dist.get("units")) if _qty(dist, "qty") is not None else None
+    poly, details = None, None
+    route = wo.get("route")
+    if isinstance(route, list) and len(route) >= 2:  # Health Auto Export mit „Route Data“
+        from .. import tracks
+        from .parsers import Point
+        pts = [Point(lat=_f(p.get("latitude") or p.get("lat")), lng=_f(p.get("longitude") or p.get("lon")),
+                     ele=_f(p.get("altitude")), time=parse_iso(p.get("timestamp") or p.get("date")))
+               for p in route if isinstance(p, dict)]
+        res = tracks.from_points(pts)
+        if res:
+            poly, details = res[0], {**res[1], "track": "ok"}
     return ActivityIn(
+        polyline=poly, details=details,
         source_id=str(wo.get("id") or f"hae-{start.isoformat()}"), start=start, sport_raw=wo.get("name"), name=wo.get("name"),
         duration_s=_qty(wo, "duration") or ((end - start).total_seconds() if end else None),
         distance_m=dist_km * 1000 if dist_km is not None else None,
@@ -218,7 +237,23 @@ def open_export(path: str):
     return open(path, "rb"), os.path.getsize(path)
 
 
+def _attach_route(w: Writer, row, zf, ref: str) -> None:
+    """Strecke aus workout-routes/*.gpx im Export holen (Pfad in export.xml beginnt mit /workout-routes/)."""
+    from .. import tracks
+    want = ref.strip("/").lower()
+    if not want:
+        return
+    name = next((n for n in zf.namelist() if n.lower().endswith(want)), None)
+    if not name:
+        return
+    try:
+        tracks.apply(w.db, row, tracks.from_file(name, zf.read(name)))
+    except Exception:  # eine kaputte Route darf den Import nicht stoppen
+        w.db.rollback()
+
+
 def import_export_xml(w: Writer, path: str, progress=None, since: datetime | None = None) -> dict:
+    zf = zipfile.ZipFile(path) if zipfile.is_zipfile(path) else None
     f, size = open_export(path)
     stream = io.BufferedReader(_Counting(f, size, progress), buffer_size=1024 * 1024)
     daily_sums: dict = defaultdict(float)  # (metric, day, quelle) -> Summe
@@ -240,13 +275,18 @@ def import_export_xml(w: Writer, path: str, progress=None, since: datetime | Non
             elif tag == "Workout":
                 a = _workout(el)
                 if a and (since is None or a.start >= since):
-                    w.activity(a)
+                    row = w.activity(a)
+                    route = el.find("WorkoutRoute/FileReference")
+                    if row is not None and route is not None and zf is not None:
+                        _attach_route(w, row, zf, route.get("path") or "")
             else:
                 continue
             if root is not None:
                 root.clear()  # Speicher freigeben: export.xml kann mehrere GB groß sein
     finally:
         f.close()
+        if zf is not None:
+            zf.close()
     # Summen: Pro Tag die Quelle mit der größten Summe (iPhone und Uhr zählen sonst doppelt)
     best: dict = {}
     for (metric, day, src), total in daily_sums.items():

@@ -1,4 +1,3 @@
-from ..store import ActivityIn
 from ..timeutil import parse_iso
 from .base import Field, Provider, SyncError, num
 
@@ -13,8 +12,10 @@ class Hevy(Provider):
     initials = "Hv"
     website = "https://www.hevyapp.com"
     delivers = ["workouts"]
-    summary = "Krafttraining: Einheiten mit Übungen, Sätzen, Wiederholungen und bewegtem Gewicht."
+    summary = "Trainings aus Hevy laufen direkt ins Krafttraining von BodyBase. Die API gibt es nur mit Hevy Pro."
     setup = ["In der Hevy-App (Pro) unter Profil → Einstellungen → Developer einen API-Schlüssel erzeugen und hier eintragen."]
+    note = ("Ohne Hevy Pro: In Hevy unter Profil → Einstellungen → Daten exportieren die workouts.csv laden und in BodyBase unter "
+            "Kraft → Importieren hochladen. Danach kannst du direkt in BodyBase weitertrainieren.")
     fields = [Field("api_key", "API-Schlüssel", "password", secret=True)]
 
     def _h(self, ctx):
@@ -28,36 +29,46 @@ class Hevy(Provider):
         return f"{data.get('workout_count', 0)} Einheiten"
 
     def sync(self, ctx):
+        """Hevy-Trainings landen im Krafttraining von BodyBase (mit Übungen, Rekorden und Auswertungen)."""
+        from .. import strength as S
+        matcher = S.Matcher(ctx.db, ctx.user.id)
         page = 1
         while page <= 200:
             data = ctx.get(f"{API}/workouts", params={"page": page, "pageSize": 10}, auth="none", headers=self._h(ctx)) or {}
             items = data.get("workouts", [])
             older = False
             for wo in items:
-                act = map_workout(wo)
-                if act.start and act.start < ctx.since:
+                payload = to_payload(wo, matcher)
+                start = parse_iso(wo.get("start_time"))
+                if start and start < ctx.since:
                     older = True
                     continue
-                ctx.writer.activity(act)
+                if not payload:
+                    continue
+                try:
+                    S.save_workout(ctx.db, ctx.user, payload, source="hevy", source_id=str(wo.get("id")))
+                    ctx.writer.counts["activities"] += 1
+                except S.StrengthError:
+                    ctx.db.rollback()
             if older or page >= (data.get("page_count") or 1):
                 break
             page += 1
 
 
-def map_workout(wo: dict) -> ActivityIn:
-    start, end = parse_iso(wo.get("start_time")), parse_iso(wo.get("end_time"))
-    volume, sets, exercises = 0.0, 0, []
-    for ex in wo.get("exercises", []):
-        exercises.append({"name": ex.get("title"), "sets": [
-            {"kg": num(s.get("weight_kg")), "reps": num(s.get("reps")), "type": s.get("type")} for s in ex.get("sets", [])]})
-        for s in ex.get("sets", []):
-            if s.get("type") == "warmup":
-                continue
-            sets += 1
-            if num(s.get("weight_kg")) and num(s.get("reps")):
-                volume += num(s.get("weight_kg")) * num(s.get("reps"))
-    return ActivityIn(
-        source_id=str(wo.get("id")), start=start, sport_raw="strength", sport="strength", name=wo.get("title") or "Krafttraining",
-        duration_s=(end - start).total_seconds() if start and end else None, volume_kg=volume or None,
-        details={"exercises": exercises, "sets": sets},
-    )
+HEVY_TYPES = {"warmup": "warmup", "normal": "normal", "failure": "failure", "dropset": "drop"}
+
+
+def to_payload(wo: dict, matcher) -> dict | None:
+    exercises = []
+    for ex in wo.get("exercises", []) or []:
+        e = matcher.get(ex.get("title") or "")
+        exercises.append({
+            "exercise_id": e.id, "notes": ex.get("notes"), "superset": ex.get("superset_id"),
+            "sets": [{"type": HEVY_TYPES.get(s.get("type") or "normal", "normal"), "kg": num(s.get("weight_kg")),
+                      "reps": num(s.get("reps")), "duration_s": num(s.get("duration_seconds")),
+                      "distance_m": num(s.get("distance_meters")), "rpe": num(s.get("rpe"))} for s in ex.get("sets", []) or []],
+        })
+    if not exercises:
+        return None
+    return {"name": wo.get("title") or "Training", "notes": wo.get("description"), "start": wo.get("start_time"),
+            "end": wo.get("end_time"), "exercises": exercises}

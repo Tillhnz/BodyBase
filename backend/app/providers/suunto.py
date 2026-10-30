@@ -1,3 +1,4 @@
+from .. import tracks
 from ..store import ActivityIn
 from ..timeutil import parse_iso
 from .base import Field, OAuthSpec, Provider, epoch, num
@@ -35,6 +36,13 @@ class Suunto(Provider):
 
     def after_token(self, ctx, token):
         return token.get("user")
+
+    has_tracks = True
+
+    def track(self, ctx, row):
+        headers = {"Ocp-Apim-Subscription-Key": ctx.app.get("subscription_key", "")}
+        data = tracks.download(ctx, f"{API}/workout/exportFit/{row.source_id}", headers=headers)
+        return tracks.from_file("suunto.fit", data) if data else None
 
     def sync(self, ctx):
         headers = {"Ocp-Apim-Subscription-Key": ctx.app.get("subscription_key", "")}

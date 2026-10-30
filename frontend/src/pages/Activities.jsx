@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
-import { Calendar, LoadChart, Route, useWidth } from "../components/charts.jsx";
+import { Calendar, LoadChart, decodePolyline, useWidth } from "../components/charts.jsx";
+import RouteMap from "../components/RouteMap.jsx";
 import { Loading, confirmDialog, toast } from "../components/feedback.jsx";
 import { EmptyState, Kpi, Segmented, SportIcon, useAsync } from "../components/ui.jsx";
 import { fmtDuration, fmtKm, fmtNum, fmtTime, todayIso } from "../fmt.js";
@@ -155,9 +156,9 @@ export default function Activities() {
   );
 }
 
-function Profile({ x, y, label, unit, colorVar, digits = 0 }) {
+function Profile({ x, y, label, unit, colorVar, digits = 0, hover, onHover }) {
   const [ref, width] = useWidth();
-  const pts = x.map((d, i) => [d, y[i]]).filter((p) => p[1] != null);
+  const pts = x.map((d, i) => [d, y[i], i]).filter((p) => p[1] != null);
   if (pts.length < 2) return null;
   const h = 120;
   const xmax = x[x.length - 1] || 1;
@@ -166,14 +167,28 @@ function Profile({ x, y, label, unit, colorVar, digits = 0 }) {
   const X = (v) => 40 + (v / xmax) * (width - 50);
   const Y = (v) => 8 + (h - 30) * (1 - (v - lo) / (hi - lo || 1));
   const d = pts.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+  function move(e) {
+    if (!onHover) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const km = ((e.clientX - r.left - 40) / (width - 50)) * xmax;
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p[0] - km) < Math.abs(best[0] - km)) best = p;
+    onHover(best[2]);
+  }
+  const cur = hover != null ? pts.find((p) => p[2] === hover) : null;
   return (
     <div ref={ref} style={{ "--c": colorVar }}>
       <div className="small muted" style={{ display: "flex", justifyContent: "space-between" }}>
-        <span>{label}</span><span>{fmtNum(lo, digits)}–{fmtNum(hi, digits)} {unit}</span>
+        <span>{label}{cur ? <strong style={{ color: "var(--chalk)", marginLeft: "0.5rem" }}>{fmtNum(cur[1], digits)} {unit} · {fmtNum(cur[0], 1)} km</strong> : null}</span>
+        <span>{fmtNum(lo, digits)}–{fmtNum(hi, digits)} {unit}</span>
       </div>
-      <svg className="chart" width={width} height={h} viewBox={`0 0 ${width} ${h}`} aria-label={label} role="img">
+      <svg className="chart" width={width} height={h} viewBox={`0 0 ${width} ${h}`} aria-label={label} role="img"
+        onMouseMove={move} onMouseLeave={() => onHover && onHover(null)} onTouchEnd={() => onHover && onHover(null)}
+        onTouchMove={(e) => e.touches[0] && move({ currentTarget: e.currentTarget, clientX: e.touches[0].clientX })}>
         <path className="chart-area" d={`${d}L${X(pts[pts.length - 1][0])},${h - 22}L${X(pts[0][0])},${h - 22}Z`} />
         <path className="chart-line" d={d} />
+        {cur && <line className="chart-cursor" x1={X(cur[0])} x2={X(cur[0])} y1={4} y2={h - 22} />}
+        {cur && <circle cx={X(cur[0])} cy={Y(cur[1])} r={4} fill="var(--c)" stroke="var(--ink)" strokeWidth={2} />}
         <text className="chart-axis" x={40} y={h - 6}>0 km</text>
         <text className="chart-axis" x={width - 10} y={h - 6} textAnchor="end">{fmtNum(xmax, 1)} km</text>
       </svg>
@@ -185,6 +200,8 @@ export function ActivityDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [{ data: a, error }] = useAsync(() => api.get(`/activities/${id}`), [id]);
+  const [hover, setHover] = useState(null);
+  const ll = useMemo(() => (a?.details?.profile?.ll ? decodePolyline(a.details.profile.ll) : null), [a]);
   if (error) return <EmptyState title="Nicht gefunden" text={error.message}><Link className="btn" to="/activities">Zurück</Link></EmptyState>;
   if (!a) return <Loading rows={2} />;
   const sp = speedLabel(a);
@@ -207,7 +224,10 @@ export function ActivityDetail() {
             <p style={{ margin: 0 }}>{when(a.start)} · {a.sport_label}{a.sport_raw && a.sport_raw !== a.name ? ` (${a.sport_raw})` : ""}</p>
           </div>
         </div>
-        <div className="actions"><button className="btn danger" onClick={remove}>Löschen</button></div>
+        <div className="actions">
+          {a.details?.workout_id ? <Link className="btn primary" to={`/strength/workout/${a.details.workout_id}`}>Im Krafttraining öffnen</Link> : null}
+          <button className="btn danger" onClick={remove}>Löschen</button>
+        </div>
       </div>
       <div className="kpis">
         <Kpi label="Dauer" value={fmtDuration(a.duration_s || a.moving_s)} sub={a.moving_s && a.duration_s && a.moving_s < a.duration_s - 60 ? `in Bewegung ${fmtDuration(a.moving_s)}` : null} />
@@ -220,14 +240,19 @@ export function ActivityDetail() {
         {a.load ? <Kpi label="Belastung" value={fmtNum(a.load, a.load < 25 ? 1 : 0)} /> : null}
         {a.volume_kg ? <Kpi label="Bewegtes Gewicht" value={fmtNum(a.volume_kg)} unit="kg" /> : null}
       </div>
+      {a.polyline ? (
+        <section className="panel map-panel">
+          <RouteMap polyline={a.polyline} hover={hover != null && ll ? ll[hover] : null} />
+        </section>
+      ) : null}
       <div className="grid-2">
-        {a.polyline ? <section className="panel"><div className="panel-head"><h2>Strecke</h2></div><Route polyline={a.polyline} /></section> : null}
         {prof && (prof.e || prof.h || prof.s) ? (
           <section className="panel stack">
             <div className="panel-head" style={{ marginBottom: 0 }}><h2>Verlauf</h2></div>
-            {prof.e && <Profile x={prof.d} y={prof.e} label="Höhe" unit="m" colorVar="var(--c-body)" />}
-            {prof.h && <Profile x={prof.d} y={prof.h} label="Puls" unit="bpm" colorVar="var(--c-heart)" />}
-            {prof.s && <Profile x={prof.d} y={prof.s} label="Tempo" unit="km/h" colorVar="var(--c-activity)" digits={1} />}
+            {prof.e && <Profile x={prof.d} y={prof.e} label="Höhe" unit="m" colorVar="var(--c-body)" hover={hover} onHover={setHover} />}
+            {prof.h && <Profile x={prof.d} y={prof.h} label="Puls" unit="bpm" colorVar="var(--c-heart)" hover={hover} onHover={setHover} />}
+            {prof.s && <Profile x={prof.d} y={prof.s} label="Tempo" unit="km/h" colorVar="var(--c-activity)" digits={1} hover={hover} onHover={setHover} />}
+            {prof.p && <Profile x={prof.d} y={prof.p} label="Leistung" unit="W" colorVar="var(--c-metabolic)" hover={hover} onHover={setHover} />}
           </section>
         ) : null}
         {exercises?.length ? (

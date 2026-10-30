@@ -26,7 +26,7 @@ DEFAULT_PRIORITY = [
     "homeassistant", "file", "csv", "api",
 ]
 ACTIVITY_PRIORITY = [
-    "garmin", "polar", "suunto", "coros", "wahoo", "concept2", "hevy", "file", "strava", "intervals",
+    "strength", "garmin", "polar", "suunto", "coros", "wahoo", "concept2", "hevy", "file", "strava", "intervals",
     "apple_health", "health_connect", "fitbit", "whoop", "oura", "withings", "manual", "api",
 ]
 
@@ -180,10 +180,11 @@ class Writer:
             setattr(row, attr, _num(getattr(a, attr)))
         row.duration_s = int(_num(a.duration_s)) if _num(a.duration_s) is not None else None
         row.moving_s = int(_num(a.moving_s)) if _num(a.moving_s) is not None else None
-        if a.polyline:
-            row.polyline = a.polyline
+        has_track = (row.details or {}).get("track") == "ok"
+        if a.polyline and not has_track:
+            row.polyline = a.polyline  # eine nachgeholte, genaue Strecke nicht durch die Vorschau ersetzen
         if a.details:
-            row.details = a.details
+            row.details = {**(row.details or {}), **a.details}
         self.db.flush()
         link_duplicates(self.db, self.user_id, row)
         self.db.commit()
