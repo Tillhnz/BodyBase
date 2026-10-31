@@ -623,6 +623,7 @@ def body_load(db: Session, user_id: int, days: int, today_: date) -> dict:
     from . import habits as H
     habit_load, habit_info = H.muscle_load(db, user_id, start)
     sources: dict[str, dict] = {}
+    per_sport: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     acts = db.scalars(select(Activity).where(Activity.user_id == user_id, Activity.day >= start,
                                              Activity.duplicate_of.is_(None), Activity.source.not_in([SOURCE, "hevy"])))
     for a in acts:
@@ -635,6 +636,7 @@ def body_load(db: Session, user_id: int, days: int, today_: date) -> dict:
         src["count"] += 1
         for m, w in weights.items():
             other[m] += minutes / 10 * w
+            per_sport[a.sport][m] += minutes / 10 * w
     muscles = []
     for m in MUSCLES:
         if m in ("cardio", "full_body", "other"):
@@ -642,9 +644,23 @@ def body_load(db: Session, user_id: int, days: int, today_: date) -> dict:
         v = strength.get(m, 0) + other.get(m, 0) + habit_load.get(m, 0)
         muscles.append({"muscle": m, "label": MUSCLES[m], "group": MUSCLE_GROUPS.get(m), "value": round(v, 1),
                         "strength": round(strength.get(m, 0), 1), "sports": round(other.get(m, 0), 1),
-                        "habits": round(habit_load.get(m, 0), 1)})
+                        "habits": round(habit_load.get(m, 0), 1),
+                        # aufgeschlüsselt nach Art, für den Filter der Körperkarte
+                        "by": {k: round(v, 2) for k, v in (
+                            [("strength", strength.get(m, 0)), ("habits", habit_load.get(m, 0))]
+                            + [(sp, vals.get(m, 0)) for sp, vals in per_sport.items()]) if v > 0}})
     muscles.sort(key=lambda x: -x["value"])
-    return {"days": days, "muscles": muscles, "sources": sorted(sources.values(), key=lambda x: -x["minutes"]),
+    categories = []
+    if sets_total:
+        categories.append({"key": "strength", "label": "Krafttraining", "detail": f"{len(wids)} Trainings · {sets_total} Sätze"})
+    for src in sorted(sources.values(), key=lambda x: -x["minutes"]):
+        h, mnt = divmod(src["minutes"], 60)
+        categories.append({"key": src["sport"], "label": src["label"],
+                           "detail": f"{src['count']}× · {h}:{mnt:02d} h" if h else f"{src['count']}× · {mnt} min"})
+    if habit_load:
+        categories.append({"key": "habits", "label": "Gewohnheiten", "detail": ", ".join(i["habit"] for i in habit_info)})
+    return {"days": days, "muscles": muscles, "categories": categories,
+            "sources": sorted(sources.values(), key=lambda x: -x["minutes"]),
             "strength": {"workouts": len(wids), "sets": sets_total}, "habits": habit_info}
 
 

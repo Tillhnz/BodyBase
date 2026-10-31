@@ -797,3 +797,8 @@ details > summary { list-style-position: inside; }
 .api-method.m-delete { background: color-mix(in srgb, var(--signal) 22%, transparent); color: var(--signal); }
 .api-input { padding: 0.25rem 0.45rem; font-size: 0.85rem; }
 .steps { padding-left: 1.2rem; display: grid; gap: 0.4rem; }
+.load-filter { margin-bottom: 1rem; }
+.load-filter .chip-sub { font-size: 0.74rem; opacity: 0.75; }
+.load-filter .chip.on { background: var(--c, var(--iris)); border-color: var(--c, var(--iris)); color: var(--ink); }
+.load-filter .chip.on i { background: var(--ink); }
+@media (max-width: 800px) { .load-filter .chip-sub { display: none; } }

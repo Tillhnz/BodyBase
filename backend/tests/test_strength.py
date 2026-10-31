@@ -226,6 +226,8 @@ def test_body_load_combines_strength_and_sports(client, auth, db):
     assert m["quads"]["sports"] >= 6  # 60 Minuten Rad
     assert m["forearms"]["sports"] >= 9  # 90 Minuten Bouldern
     assert {s["sport"] for s in r["sources"]} >= {"ride", "climb"}
+    assert [c["key"] for c in r["categories"]][0] == "strength" and {"ride", "climb"} <= {c["key"] for c in r["categories"]}
+    assert m["quads"]["by"]["ride"] >= 6 and "climb" not in m["quads"]["by"] and m["forearms"]["by"]["climb"] >= 9
     assert date.today()
 
 

@@ -240,41 +240,57 @@ function relWhen(iso) {
 const LOAD_RANGES = [{ value: 7, label: "7 Tage" }, { value: 30, label: "30 Tage" }, { value: 90, label: "90 Tage" }, { value: 365, label: "1 Jahr" }];
 
 /** Welche Körperregionen im Zeitraum beansprucht wurden: Krafttraining plus Rad, Laufen, Klettern & Co. */
+const LOAD_COLORS = {
+  strength: "var(--c-activity)", ride: "var(--c-recovery)", run: "var(--c-heart)", climb: "var(--c-sleep)", habits: "var(--c-nutrition)",
+  swim: "var(--c-body)", hike: "var(--c-recovery)", walk: "var(--mute)", row: "var(--c-body)", ski: "var(--c-body)",
+  yoga: "var(--c-sleep)", team: "var(--c-metabolic)", cardio: "var(--c-metabolic)",
+};
+
+/** Welche Körperregionen im Zeitraum beansprucht wurden; filterbar nach Aktivitätsart. */
 function BodyLoadPanel({ refreshKey }) {
   const [days, setDays] = useState(() => { try { return Number(localStorage.getItem("bodybase-load-days")) || 30; } catch { return 30; } });
   const [data, setData] = useState(null);
+  const [only, setOnly] = useState([]); // leer = alle Arten
   useEffect(() => {
     try { localStorage.setItem("bodybase-load-days", String(days)); } catch { /* privat */ }
     api.get(`/strength/body-load?days=${days}`).then(setData).catch(() => setData(null));
   }, [days, refreshKey]);
+  const cats = data?.categories || [];
+  const active = only.filter((k) => cats.some((c) => c.key === k));
+  const labels = Object.fromEntries(cats.map((c) => [c.key, c.label]));
   const values = {};
   const detail = {};
   for (const m of data?.muscles || []) {
-    if (m.value > 0) {
-      values[m.muscle] = m.value;
-      detail[m.muscle] = [m.strength ? `Kraft ${fmtNum(m.strength, m.strength % 1 ? 1 : 0)}` : null,
-        m.sports ? `Ausdauer & Sport ${fmtNum(m.sports, m.sports % 1 ? 1 : 0)}` : null,
-        m.habits ? `Gewohnheiten ${fmtNum(m.habits, m.habits % 1 ? 1 : 0)}` : null].filter(Boolean).join(" · ");
+    const parts = Object.entries(m.by || {}).filter(([k]) => !active.length || active.includes(k));
+    const v = parts.reduce((a, [, x]) => a + x, 0);
+    if (v > 0) {
+      values[m.muscle] = Math.round(v * 10) / 10;
+      detail[m.muscle] = parts.sort((a, b) => b[1] - a[1]).map(([k, x]) => `${labels[k] || k} ${fmtNum(x, x < 10 && x % 1 ? 1 : 0)}`).join(" · ");
     }
   }
-  const empty = data && !data.strength.sets && !data.sources.length && !data.habits?.length;
+  const toggle = (k) => setOnly((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
+  const color = active.length === 1 ? LOAD_COLORS[active[0]] || "var(--c-activity)" : "var(--c-activity)";
   return (
     <section className="panel cat-activity">
       <div className="panel-head">
         <h2>Beanspruchte Körperregionen</h2>
         <Segmented value={days} onChange={setDays} options={LOAD_RANGES} label="Zeitraum" />
       </div>
-      {!data ? <p className="muted small">Lade …</p> : empty ? (
+      {!data ? <p className="muted small">Lade …</p> : !cats.length ? (
         <p className="muted">Im Zeitraum gibt es kein Training. Krafttraining, Radfahren, Laufen, Klettern und andere Sportarten erscheinen hier als Körperkarte.</p>
       ) : (
         <>
-          <BodyMap values={values} unit="Punkte" detail={detail} />
-          <div className="load-sources">
-            {data.strength.sets > 0 && <span className="pill"><b>Kraft</b> {data.strength.workouts} Trainings · {data.strength.sets} Sätze</span>}
-            {data.sources.map((s) => <span key={s.sport} className="pill"><b>{s.label}</b> {fmtMinutes(s.minutes)}</span>)}
-            {(data.habits || []).map((h) => <span key={h.habit} className="pill"><b>{h.habit}</b> {fmtNum(h.total)} {h.unit || ""}</span>)}
+          <div className="chips load-filter" role="group" aria-label="Nach Aktivität filtern">
+            <button type="button" className={`chip${!active.length ? " on" : ""}`} onClick={() => setOnly([])}>Alle</button>
+            {cats.map((c) => (
+              <button type="button" key={c.key} className={`chip${active.includes(c.key) ? " on" : ""}`} style={{ "--c": LOAD_COLORS[c.key] || "var(--iris)" }}
+                onClick={() => toggle(c.key)} title={c.detail} aria-pressed={active.includes(c.key)}>
+                <i />{c.label}<span className="chip-sub">{c.detail}</span>
+              </button>
+            ))}
           </div>
-          <p className="hint">Ein Punkt entspricht etwa einem Arbeitssatz. Ausdauer zählt je 10 Minuten anteilig für die beteiligten Muskeln, beim Radfahren also vor allem Oberschenkel, Gesäß und Waden, beim Klettern Unterarme, Rücken und Bizeps.</p>
+          <BodyMap values={values} unit="Punkte" detail={detail} color={color} />
+          <p className="hint">Tippe eine oder mehrere Aktivitäten an, um nur deren Belastung zu sehen. Ein Punkt entspricht etwa einem Arbeitssatz; Ausdauer zählt je 10 Minuten anteilig für die beteiligten Muskeln, Gewohnheiten mit 12 Wiederholungen je Satz.</p>
         </>
       )}
     </section>
