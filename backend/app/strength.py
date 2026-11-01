@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .models import Activity, Exercise, Routine, User, Workout, WorkoutSet
@@ -47,9 +47,13 @@ def assign_media(db: Session) -> int:
     """Eigene Übungen (z. B. aus Hevy) mit Bildern verknüpfen; ohne Muskelzuordnung auch die Muskeln übernehmen."""
     from . import strength_media
     n = 0
-    for e in db.scalars(select(Exercise).where(Exercise.user_id.is_not(None), Exercise.media_checked.is_not(True))):
+    builtins = [b for b in db.scalars(select(Exercise).where(Exercise.user_id.is_(None))) if b.media]
+    for e in db.scalars(select(Exercise).where(Exercise.user_id.is_not(None), Exercise.media.is_(None))):
         e.media_checked = True
-        mid = strength_media.match([e.name, *(e.aliases or [])], e.equipment)
+        mid = strength_media.match([e.name, *(e.aliases or [])], e.equipment, threshold=0.7)
+        if not mid:  # sehr ähnlich zu einer eingebauten Übung: deren Bild nehmen
+            twin = _twin(e, builtins)
+            mid = twin.media if twin else None
         if not mid:
             continue
         e.media = mid
@@ -73,6 +77,81 @@ def assign_unknown_muscles(db: Session) -> int:
     if n:
         db.commit()
     return n
+
+
+def _tokens(name: str) -> set[str]:
+    from .strength_media import translate
+    return {w.rstrip("s") for w in re.findall(r"[a-z0-9]+", translate(name)) if w not in {"the", "a", "with", "on", "of"}}
+
+
+def _twin(e: Exercise, others: list) -> Exercise | None:
+    """Gleiche Übung unter anderem Namen? Gleiche Wörter (deutsch übersetzt) und gleiche Ausrüstung."""
+    a = _tokens(e.name)
+    best, best_s = None, 0.0
+    for o in others:
+        if o.id == e.id:
+            continue
+        for n in [o.name, *(o.aliases or [])]:
+            b = _tokens(n)
+            if not a or not b:
+                continue
+            s = len(a & b) / len(a | b) + (0.1 if o.equipment == e.equipment else 0)
+            if s > best_s:
+                best, best_s = o, s
+    return best if best_s >= 0.8 else None
+
+
+def find_duplicates(db: Session, user_id: int) -> list[dict]:
+    """Eigene Übungen, die es schon gibt (gleicher Name übersetzt, oder gleiches Bild und gleiche Ausrüstung)."""
+    exs = [e for e in exercises_for(db, user_id) if not e.archived and not e.merged_into]
+    usage = dict(db.execute(select(WorkoutSet.exercise_id, func.count(WorkoutSet.id)).where(WorkoutSet.user_id == user_id)
+                            .group_by(WorkoutSet.exercise_id)).all())
+    out, seen = [], set()
+    for e in exs:
+        if e.user_id is None or e.id in seen:
+            continue
+        others = [o for o in exs if o.id != e.id and o.id not in seen]
+        twin = _twin(e, others)
+        reason = "gleicher Name"
+        if twin is None and e.media:
+            twin = next((o for o in others if o.media == e.media and o.equipment == e.equipment), None)
+            reason = "gleiche Übung im Bild"
+        if twin is None:
+            continue
+        # behalten: eingebaute Übung, sonst die häufiger benutzte
+        keep, drop = (twin, e) if twin.user_id is None or usage.get(twin.id, 0) >= usage.get(e.id, 0) else (e, twin)
+        if drop.user_id is None:
+            continue
+        seen |= {keep.id, drop.id}
+        out.append({"keep": exercise_dict(keep), "drop": exercise_dict(drop), "reason": reason,
+                    "keep_sets": usage.get(keep.id, 0), "drop_sets": usage.get(drop.id, 0)})
+    return out
+
+
+def merge_exercise(db: Session, user_id: int, source: Exercise, target: Exercise) -> dict:
+    """Alle Sätze, Routinen und Gewohnheiten von source auf target umhängen; source wird ausgeblendet."""
+    from sqlalchemy import update
+
+    from .models import Habit
+    if source.user_id != user_id or source.id == target.id:
+        raise StrengthError("Nur eigene Übungen lassen sich zusammenführen.")
+    if target.user_id not in (None, user_id):
+        raise StrengthError("Übung nicht gefunden.")
+    moved = db.execute(update(WorkoutSet).where(WorkoutSet.user_id == user_id, WorkoutSet.exercise_id == source.id)
+                       .values(exercise_id=target.id)).rowcount or 0
+    for w in db.scalars(select(Workout).where(Workout.user_id == user_id)):
+        if w.layout and any(x.get("exercise_id") == source.id for x in w.layout):
+            w.layout = [{**x, "exercise_id": target.id} if x.get("exercise_id") == source.id else x for x in w.layout]
+    for r in db.scalars(select(Routine).where(Routine.user_id == user_id)):
+        if r.exercises and any(x.get("exercise_id") == source.id for x in r.exercises):
+            r.exercises = [{**x, "exercise_id": target.id} if x.get("exercise_id") == source.id else x for x in r.exercises]
+    for h in db.scalars(select(Habit).where(Habit.user_id == user_id, Habit.exercise_id == source.id)):
+        h.exercise_id = target.id
+    if target.user_id is not None and source.name not in (target.aliases or []):
+        target.aliases = [*(target.aliases or []), source.name]
+    source.archived, source.merged_into = True, target.id
+    db.commit()
+    return {"moved_sets": moved, "target": exercise_dict(target)}
 
 
 def norm(name: str | None) -> str:
@@ -111,7 +190,14 @@ class Matcher:
     def __init__(self, db: Session, user_id: int):
         self.db, self.user_id = db, user_id
         self.by_name: dict[str, Exercise] = {}
-        for e in exercises_for(db, user_id):
+        all_ex = {e.id: e for e in exercises_for(db, user_id)}
+        for e in all_ex.values():
+            if e.merged_into and e.merged_into in all_ex:  # zusammengeführt: Importe landen beim Ziel
+                target = all_ex[e.merged_into]
+                for n in [e.name, *(e.aliases or [])]:
+                    if norm(n):
+                        self.by_name[norm(n)] = target
+                continue
             for n in [e.name, *(e.aliases or [])]:
                 key = norm(n)
                 # eigene Übungen haben Vorrang vor eingebauten

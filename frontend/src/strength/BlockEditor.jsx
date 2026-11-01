@@ -106,7 +106,7 @@ function ExerciseBlock({ block, index, count, mode, ex, meta, previous, onChange
   return (
     <section className={`panel block${block.superset != null ? " in-superset" : ""}${nextInSuperset ? " superset-next" : ""}`} style={{ "--c": groupColor }}>
       <div className="block-head">
-        <ExerciseThumb media={ex?.media} name={ex?.name} size={46} color={groupColor} />
+        <ExerciseThumb media={ex?.media} name={ex?.name} primary={ex?.primary} equipment={ex?.equipment} size={46} color={groupColor} />
         <div className="block-title">
           {ex ? <Link to={`/strength/exercise/${ex.id}`} className="link">{ex.name}</Link> : <strong>Übung</strong>}
           <div className="tiny muted">

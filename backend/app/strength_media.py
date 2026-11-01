@@ -66,7 +66,9 @@ def _toks(text: str) -> set[str]:
 
 
 def match(names: list[str], equipment: str | None = None, threshold: float = 0.75) -> str | None:
-    """Bester Eintrag der Datenbank für eine Übung (Ähnlichkeit der Wörter im Namen, passende Ausrüstung zählt mit)."""
+    """Bester Eintrag der Datenbank für eine Übung (Ähnlichkeit der Wörter im Namen, passende Ausrüstung zählt mit).
+    Deutsche Namen werden vorher übersetzt."""
+    names = list(names) + [translate(n) for n in names if translate(n) != (n or "").lower()]
     best, best_id = 0.0, None
     want_eq = EQUIP.get(equipment or "")
     for e in index().values():
@@ -83,6 +85,32 @@ def match(names: list[str], equipment: str | None = None, threshold: float = 0.7
         if score > best:
             best, best_id = score, e["id"]
     return best_id if best >= threshold else None
+
+
+# Deutsche Begriffe -> englische, damit eigene Übungen mit deutschem Namen ein Bild finden
+GERMAN = [
+    ("schrägbankdrücken", "incline bench press"), ("negativbankdrücken", "decline bench press"), ("bankdrücken", "bench press"),
+    ("schulterdrücken", "shoulder press"), ("nackendrücken", "shoulder press"), ("brustpresse", "chest press"),
+    ("beinpresse", "leg press"), ("beinstrecker", "leg extension"), ("beinbeuger", "leg curl"), ("wadenheben", "calf raise"),
+    ("kniebeugen", "squat"), ("kniebeuge", "squat"), ("kreuzheben", "deadlift"), ("rumänisch", "romanian"),
+    ("ausfallschritte", "lunge"), ("ausfallschritt", "lunge"), ("latziehen", "lat pulldown"), ("latzug", "lat pulldown"),
+    ("klimmzüge", "pull up"), ("klimmzug", "pull up"), ("liegestütze", "push up"), ("liegestütz", "push up"),
+    ("seitheben", "lateral raise"), ("frontheben", "front raise"), ("fliegende", "fly"), ("überzüge", "pullover"),
+    ("rudern", "row"), ("bizepscurls", "biceps curl"), ("bizeps", "biceps"), ("trizepsdrücken", "triceps pushdown"),
+    ("trizeps", "triceps"), ("hüftheben", "hip thrust"), ("hüftstoß", "hip thrust"), ("rückenstrecker", "hyperextension"),
+    ("bauch", "ab"), ("knieheben", "knee raise"), ("beinheben", "leg raise"), ("unterarmstütz", "plank"), ("seitstütz", "side plank"),
+    ("kurzhanteln", "dumbbell"), ("kurzhantel", "dumbbell"), ("langhantel", "barbell"), ("kabelzug", "cable"), ("kabel", "cable"),
+    ("maschine", "machine"), ("multipresse", "smith machine"), ("sz-stange", "ez bar"), ("schräg", "incline"), ("sitzend", "seated"),
+    ("stehend", "standing"), ("einarmig", "one arm"), ("eng", "close grip"), ("breit", "wide grip"), ("barren", "parallel bars"),
+    ("hängend", "hanging"), ("liegend", "lying"),
+]
+
+
+def translate(name: str) -> str:
+    s = (name or "").lower()
+    for de, en in GERMAN:
+        s = s.replace(de, f" {en} ")
+    return s
 
 
 def media_for_catalog(key: str, names: list[str], equipment: str) -> str | None:

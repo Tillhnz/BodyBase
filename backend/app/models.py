@@ -205,6 +205,7 @@ class Exercise(Base):
     archived: Mapped[bool | None] = mapped_column(Boolean, default=False, nullable=True)
     media: Mapped[str | None] = mapped_column(String(80), nullable=True)  # Kennung in free-exercise-db (Bilder, Anleitung)
     media_checked: Mapped[bool | None] = mapped_column(Boolean, default=False, nullable=True)
+    merged_into: Mapped[int | None] = mapped_column(Integer, nullable=True)  # zusammengeführt: Importe landen dort
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -342,3 +343,19 @@ class ApiKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class BodySegment(Base):
+    """Körperzusammensetzung je Segment (Arme, Beine, Rumpf), z. B. von Withings Body Scan / Body Segment."""
+    __tablename__ = "body_segments"
+    __table_args__ = (UniqueConstraint("user_id", "source", "ts", "kind", "position", name="uq_body_segment"),
+                      Index("ix_body_segments_user_ts", "user_id", "ts"))
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    source: Mapped[str] = mapped_column(String(40))
+    ts: Mapped[datetime] = mapped_column(DateTime)
+    day: Mapped[date] = mapped_column(Date)
+    kind: Mapped[str] = mapped_column(String(10))  # muscle | fat | ffm
+    position: Mapped[int] = mapped_column(Integer)  # Segment-Code der Quelle
+    value: Mapped[float] = mapped_column(Float)  # kg

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import EntryDialog from "../components/EntryDialog.jsx";
+import Segments from "../components/Segments.jsx";
 import { Loading } from "../components/feedback.jsx";
 import { EmptyState, MetricCard, useAsync } from "../components/ui.jsx";
 import { CATEGORY_ORDER, useMeta } from "../meta.js";
@@ -38,6 +39,7 @@ export default function Health() {
           <button className="btn primary" onClick={() => setEntry(true)}>Wert eintragen</button>
         </div>
       </div>
+      {cat === "body" && <Segments />}
       <div className="tabs" role="tablist">
         {CATEGORY_ORDER.map((c) => (
           <button key={c} role="tab" aria-selected={c === cat} className={`tab cat-${c}${c === cat ? " on" : ""}`} onClick={() => setParams({ c })}>

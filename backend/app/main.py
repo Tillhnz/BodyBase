@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from . import __version__, audit, server_settings, sync
 from .config import settings
 from .database import Base, SessionLocal, engine, ensure_columns
-from .routers import account, admin, apikeys, auth, connections, data, habits, imports, mapconfig, strength, version
+from .routers import account, admin, apikeys, auth, connections, data, habits, imports, mapconfig, segments, strength, version
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("bodybase")
@@ -68,7 +68,7 @@ async def guard(request, call_next):
     return response
 
 
-for r in (auth.router, account.router, data.router, connections.router, imports.router, admin.router, mapconfig.router, strength.router, habits.router, apikeys.router, version.router):
+for r in (auth.router, account.router, data.router, connections.router, imports.router, admin.router, mapconfig.router, strength.router, habits.router, apikeys.router, segments.router, version.router):
     app.include_router(r)
 
 

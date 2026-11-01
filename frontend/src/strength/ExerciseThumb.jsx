@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import MoveAnim from "./MoveAnim.jsx";
 
 /**
  * Vorschaubild einer Übung. Zwei Fotos (Start- und Endposition) im Wechsel ergeben die Animation:
  * immer bei animate, sonst beim Darüberfahren. Ohne Bild: farbiger Kreis mit Anfangsbuchstaben.
  */
-export default function ExerciseThumb({ media, name, size = 40, animate = false, color, className = "" }) {
+export default function ExerciseThumb({ media, name, primary, equipment, size = 40, animate = false, color, className = "" }) {
   const [hover, setHover] = useState(false);
   const [frame, setFrame] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -15,8 +16,12 @@ export default function ExerciseThumb({ media, name, size = 40, animate = false,
     return () => clearInterval(t);
   }, [run, animate]);
   useEffect(() => setFailed(false), [media]);
-  if (!media || failed) {
-    return <span className={`ex-dot ${className}`} style={{ width: size, height: size, "--c": color, fontSize: size * 0.42 }} aria-hidden="true">{(name || "?").slice(0, 1)}</span>;
+  if (!media || failed) {  // kein Foto: eigene, schematische Bewegungsanimation
+    return (
+      <span className={className} style={{ display: "contents" }} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+        <MoveAnim name={name} primary={primary} equipment={equipment} size={size} animate={animate || hover} color={color} />
+      </span>
+    );
   }
   const src = (n) => `/api/strength/media/${encodeURIComponent(media)}/${n}.jpg`;
   return (

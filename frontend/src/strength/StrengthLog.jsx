@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { confirmDialog, Loading, toast } from "../components/feedback.jsx";
 import { EmptyState, Modal } from "../components/ui.jsx";
 import { connectHr, disconnectHr, hrState, hrSupported, hrUnsupportedReason, reconnectKnownHr, subscribeHr, ZONES, zoneOf } from "../hr.js";
+import BodyMap, { MUSCLE_LABELS } from "../components/BodyMap.jsx";
 import BlockEditor from "./BlockEditor.jsx";
 import {
   draftStats, fmtClock, fmtRest, fmtVolume, fromDraftBlock, loadExercises, newWorkout, parseClock, parseNum, readLocalActive, restAlarm,
@@ -161,6 +162,7 @@ export default function StrengthLog() {
         </div>
       </div>
 
+      <LiveMuscles blocks={w.exercises} byId={ex.byId} />
       {!w.exercises.length && <p className="muted" style={{ textAlign: "center", margin: "2rem 0 1rem" }}>Füge deine erste Übung hinzu.</p>}
       <BlockEditor blocks={w.exercises} onChange={(blocks) => change((cur) => ({ ...cur, exercises: blocks }))} mode="log"
         byId={ex.byId} meta={ex.meta} previous={previous} onSetDone={onSetDone} />
@@ -276,5 +278,36 @@ function FinishDialog({ w, stats, elapsed, onClose, onSaved }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+
+/** Welche Muskeln im laufenden Training schon dran waren: abgehakte Arbeitssätze, Nebenmuskeln halb. */
+function LiveMuscles({ blocks, byId }) {
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem("bodybase-live-muscles") === "1"; } catch { return false; } });
+  const values = {};
+  for (const b of blocks) {
+    const e = byId.get(b.exercise_id);
+    if (!e) continue;
+    const n = b.sets.filter((s) => s.done && s.type !== "warmup").length;
+    if (!n) continue;
+    if (MUSCLE_LABELS[e.primary]) values[e.primary] = (values[e.primary] || 0) + n;
+    for (const m of e.secondary || []) if (MUSCLE_LABELS[m]) values[m] = (values[m] || 0) + n * 0.5;
+  }
+  const top = Object.entries(values).sort((a, b) => b[1] - a[1]);
+  if (!top.length) return null;
+  function toggle(e) {
+    const v = e.currentTarget.open;
+    setOpen(v);
+    try { localStorage.setItem("bodybase-live-muscles", v ? "1" : "0"); } catch { /* privat */ }
+  }
+  return (
+    <details className="panel live-muscles" open={open} onToggle={toggle}>
+      <summary>
+        <strong>Trainierte Muskeln</strong>
+        <span className="live-chips">{top.slice(0, 5).map(([m, v]) => <span key={m} className="pill">{MUSCLE_LABELS[m]} {v % 1 ? v.toFixed(1).replace(".", ",") : v}</span>)}</span>
+      </summary>
+      <BodyMap values={values} unit="Sätze" size="sm" />
+    </details>
   );
 }

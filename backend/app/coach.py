@@ -125,6 +125,22 @@ def insights(db: Session, user_id: int, today: date) -> list[dict]:
             if d["streak"] >= 3:
                 text += f" Deine Serie von {d['streak']} Tagen hält, wenn du es heute noch schaffst."
             out.append({"type": "tip", "title": f"{h.name} offen", "text": text, "habit_id": h.id})
+    # Muskelmasse je Region (Waage mit Segmentmessung)
+    try:
+        from . import segments as SG
+        from .models import User
+        seg = SG.overview(db, db.get(User, user_id), 90, today)
+        for r in seg.get("regions", []) if seg.get("has_data") else []:
+            if r["change_kg"] is None:
+                continue
+            if r["change_kg"] >= 0.2:
+                out.append({"type": "good", "title": f"{r['region']}: +{_fmt(round(r['change_kg'], 1))} kg Muskeln in 90 Tagen",
+                            "text": r["comment"]})
+            elif r["change_kg"] <= -0.3:
+                out.append({"type": "tip", "title": f"{r['region']}: {_fmt(round(r['change_kg'], 1))} kg Muskeln in 90 Tagen",
+                            "text": r["comment"]})
+    except Exception:  # Hinweise dürfen nie die Startseite blockieren
+        pass
     order = {"warn": 0, "tip": 1, "good": 2}
     out.sort(key=lambda x: order[x["type"]])
     return out[:8]

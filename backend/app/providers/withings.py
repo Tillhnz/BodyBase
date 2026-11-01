@@ -11,7 +11,10 @@ MEASURE_TYPES = {
     1: ("weight", 1), 5: ("lean_mass", 1), 6: ("body_fat", 1), 8: (None, 1), 9: ("bp_diastolic", 1), 10: ("bp_systolic", 1),
     11: ("heart_rate", 1), 54: ("spo2", 1), 71: ("body_temp", 1), 73: ("body_temp", 1), 76: ("muscle_mass", 1),
     77: (None, 1), 88: ("bone_mass", 1), 123: ("vo2max", 1), 170: ("visceral_fat", 1),
+    173: (None, 1), 174: (None, 1), 175: (None, 1),
 }
+# Segmentwerte (Body Scan, Body Segment): Typ -> Art; das Segment steht im Feld „position“ der Messung
+SEGMENT_TYPES = {173: "ffm", 174: "fat", 175: "muscle"}
 
 WORKOUT_CATEGORIES = {
     1: "Walk", 2: "Run", 3: "Hiking", 4: "Skating", 5: "BMX", 6: "Bicycling", 7: "Swimming", 8: "Surfing", 9: "Kitesurfing",
@@ -82,6 +85,13 @@ class Withings(Provider):
             for grp in body.get("measuregrps", []):
                 ts = datetime.fromtimestamp(grp.get("date", 0), timezone.utc).replace(tzinfo=None)
                 for m in grp.get("measures", []):
+                    if m.get("type") in SEGMENT_TYPES:
+                        pos = m.get("position", m.get("segment"))
+                        if pos is not None:
+                            from .. import segments
+                            segments.store(ctx.db, ctx.user.id, self.key, ts, SEGMENT_TYPES[m["type"]], int(pos),
+                                           scaled(m.get("value"), m.get("unit")))
+                        continue
                     metric, factor = MEASURE_TYPES.get(m.get("type"), (None, 1))
                     if metric:
                         w.sample(metric, ts, scaled(m.get("value"), m.get("unit")) * factor)

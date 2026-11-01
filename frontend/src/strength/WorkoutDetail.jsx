@@ -138,7 +138,7 @@ export default function WorkoutDetail() {
           return (
             <section key={i} className={`panel${b.superset != null ? " in-superset" : ""}`}>
               <div className="panel-head">
-                <h3 className="ex-title"><ExerciseThumb media={ex.byId.get(b.exercise_id)?.media} name={b.name} size={40} />
+                <h3 className="ex-title"><ExerciseThumb media={ex.byId.get(b.exercise_id)?.media} name={b.name} primary={b.primary} equipment={ex.byId.get(b.exercise_id)?.equipment} size={40} />
                   <Link className="link" to={`/strength/exercise/${b.exercise_id}`}>{b.name}</Link></h3>
                 {b.superset != null && <span className="pill iris">Supersatz {b.superset + 1}</span>}
               </div>

@@ -40,7 +40,7 @@ export default function ExercisePicker({ onClose, onPick, multi = true, title = 
 
   const row = (e) => (
     <button type="button" key={e.id} className={`ex-row${picked.includes(e.id) ? " on" : ""}`} onClick={() => toggle(e.id)}>
-      <ExerciseThumb media={e.media} name={e.name} size={44} color={GROUP_COLORS[e.group]} />
+      <ExerciseThumb media={e.media} name={e.name} primary={e.primary} equipment={e.equipment} size={44} color={GROUP_COLORS[e.group]} />
       <span className="ex-row-main">
         <strong>{e.name}</strong>
         <span className="tiny muted">{ex.meta.muscles[e.primary] || e.primary} · {ex.meta.equipment[e.equipment] || e.equipment}{e.custom ? " · eigene" : ""}</span>

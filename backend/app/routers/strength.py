@@ -98,6 +98,9 @@ def create_exercise(body: Body, user: User = Depends(current_user), db: Session 
     values = _exercise_values(data)
     media = data.get("media") if data.get("media") in strength_media.index() else strength_media.match([values["name"]], values["equipment"])
     e = Exercise(user_id=user.id, aliases=[], media=media, media_checked=True, **values)
+    if not media:  # gleiche Übung schon eingebaut (z. B. anderer deutscher Name): deren Bild nehmen
+        twin = S._twin(e, [b for b in S.exercises_for(db, user.id) if b.user_id is None and b.media])
+        e.media = twin.media if twin else None
     db.add(e)
     db.commit()
     return S.exercise_dict(e)
@@ -134,6 +137,27 @@ def delete_exercise(exercise_id: int, user: User = Depends(current_user), db: Se
     else:
         db.delete(e)
     db.commit()
+
+
+@router.get("/duplicates")
+def duplicates(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Vermutlich doppelte Übungen (z. B. aus einem Import unter anderem Namen)."""
+    return S.find_duplicates(db, user.id)
+
+
+class MergeIn(BaseModel):
+    into: int
+
+
+@router.post("/exercises/{exercise_id}/merge")
+def merge(exercise_id: int, data: MergeIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Eigene Übung in eine andere überführen: Verlauf, Routinen und Gewohnheiten wandern mit."""
+    source = _own_exercise(db, user, exercise_id)
+    target = _own_exercise(db, user, data.into)
+    try:
+        return S.merge_exercise(db, user.id, source, target)
+    except S.StrengthError as e:
+        _bad(e)
 
 
 @router.get("/exercises/{exercise_id}")

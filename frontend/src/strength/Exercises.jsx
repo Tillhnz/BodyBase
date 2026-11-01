@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { LineChart } from "../components/charts.jsx";
@@ -6,7 +6,7 @@ import { confirmDialog, Loading, toast } from "../components/feedback.jsx";
 import { EmptyState, Kpi, Segmented, useAsync } from "../components/ui.jsx";
 import { fmtDate, fmtNum } from "../fmt.js";
 import BodyMap from "../components/BodyMap.jsx";
-import { ExerciseForm } from "./ExercisePicker.jsx";
+import ExercisePicker, { ExerciseForm } from "./ExercisePicker.jsx";
 import ExerciseThumb from "./ExerciseThumb.jsx";
 import { GROUP_COLORS, fmtClock, fmtKg, fmtVolume, loadExercises, setText, useExercises } from "./shared.js";
 
@@ -37,6 +37,7 @@ export function ExerciseLibrary() {
         </div>
         <div className="actions"><button className="btn primary" onClick={() => setCreating(true)}>Eigene Übung</button></div>
       </div>
+      <Duplicates />
       <div className="filters" style={{ marginBottom: "1rem" }}>
         <input type="search" placeholder="Suchen …" value={q} onChange={(e) => setQ(e.target.value)} />
         <label className="check"><input type="checkbox" checked={onlyUsed} onChange={(e) => setOnlyUsed(e.target.checked)} />Nur benutzte</label>
@@ -49,7 +50,7 @@ export function ExerciseLibrary() {
       <div className="ex-grid">
         {list.map((e) => (
           <Link key={e.id} to={`/strength/exercise/${e.id}`} className="ex-row" style={{ "--c": GROUP_COLORS[e.group] }}>
-            <ExerciseThumb media={e.media} name={e.name} size={48} color={GROUP_COLORS[e.group]} />
+            <ExerciseThumb media={e.media} name={e.name} primary={e.primary} equipment={e.equipment} size={48} color={GROUP_COLORS[e.group]} />
             <span className="ex-row-main">
               <strong>{e.name}</strong>
               <span className="tiny muted">{ex.meta.muscles[e.primary]} · {ex.meta.equipment[e.equipment]}{e.custom ? " · eigene" : ""}</span>
@@ -91,6 +92,7 @@ export function ExerciseDetail() {
   const [{ data, error }, setData] = useAsync(() => api.get(`/strength/exercises/${id}`), [id]);
   const [metric, setMetric] = useState(null);
   const [editing, setEditing] = useState(false);
+  const [merging, setMerging] = useState(false);
   if (error) return <EmptyState title="Nicht gefunden" text={error.message}><Link className="btn" to="/strength/exercises">Zurück</Link></EmptyState>;
   if (!data || !exs) return <Loading rows={3} />;
   const e = data.exercise;
@@ -120,12 +122,13 @@ export function ExerciseDetail() {
         {e.custom && (
           <div className="actions">
             <button className="btn" onClick={() => setEditing(true)}>Bearbeiten</button>
+            <button className="btn" onClick={() => setMerging(true)}>Zusammenführen …</button>
             <button className="btn danger" onClick={archive}>Entfernen</button>
           </div>
         )}
       </div>
       <section className="panel ex-hero">
-        <ExerciseThumb media={e.media} name={e.name} size={320} animate color={GROUP_COLORS[e.group]} />
+        <ExerciseThumb media={e.media} name={e.name} primary={e.primary} equipment={e.equipment} size={320} animate color={GROUP_COLORS[e.group]} />
         <div className="stack" style={{ gap: "0.8rem" }}>
           <div className="ex-muscles">
             <BodyMap values={{ ...Object.fromEntries(e.secondary.map((m) => [m, 1])), [e.primary]: 2 }} unit="" list={false} size="sm" />
@@ -143,7 +146,7 @@ export function ExerciseDetail() {
               <p className="tiny muted">Bilder und Anleitung: {data.media.source}</p>
             </details>
           )}
-          {!e.media && <p className="hint">Für diese Übung gibt es noch kein Bild.{e.custom ? " Unter „Bearbeiten“ kannst du eins aus der Bilddatenbank wählen." : ""}</p>}
+          {!e.media && <p className="hint">Kein Foto vorhanden, deshalb eine schematische Animation.{e.custom ? " Unter „Bearbeiten“ kannst du ein Foto aus der Bilddatenbank wählen." : ""}</p>}
         </div>
       </section>
       {!data.sessions.length ? (
@@ -197,7 +200,52 @@ export function ExerciseDetail() {
           </div>
         </>
       )}
+      {merging && <ExercisePicker multi={false} title={`„${e.name}“ zusammenführen mit …`} onClose={() => setMerging(false)}
+        onPick={async ([target]) => {
+          if (target === e.id) return;
+          const t = exs.byId.get(target);
+          if (!(await confirmDialog(`Alle Sätze, Routinen und Gewohnheiten von „${e.name}“ wandern zu „${t?.name}“. „${e.name}“ verschwindet aus der Auswahl; spätere Importe landen automatisch bei „${t?.name}“.`, { confirmLabel: "Zusammenführen" }))) return;
+          try {
+            const r = await api.post(`/strength/exercises/${e.id}/merge`, { into: target });
+            await loadExercises(true);
+            toast(`${r.moved_sets} Sätze übernommen`);
+            navigate(`/strength/exercise/${target}`);
+          } catch (err) { toast(err.message, "error"); }
+        }} />}
       {editing && <ExerciseForm initial={e} onClose={() => setEditing(false)} onSaved={async () => { setEditing(false); setData(await api.get(`/strength/exercises/${id}`)); }} />}
     </div>
+  );
+}
+
+
+/** Vermutlich doppelte Übungen mit einem Klick zusammenführen. */
+function Duplicates() {
+  const [items, setItems] = useState(null);
+  const [busy, setBusy] = useState(null);
+  useEffect(() => { api.get("/strength/duplicates").then(setItems).catch(() => setItems([])); }, []);
+  if (!items?.length) return null;
+  async function merge(d) {
+    setBusy(d.drop.id);
+    try {
+      const r = await api.post(`/strength/exercises/${d.drop.id}/merge`, { into: d.keep.id });
+      setItems((cur) => cur.filter((x) => x !== d));
+      await loadExercises(true);
+      toast(`Zusammengeführt, ${r.moved_sets} Sätze übernommen`);
+    } catch (e) { toast(e.message, "error"); } finally { setBusy(null); }
+  }
+  return (
+    <section className="panel dupes">
+      <div className="panel-head"><h2>Vermutlich doppelt ({items.length})</h2></div>
+      <p className="small muted" style={{ marginTop: 0 }}>Beim Zusammenführen wandern Verlauf, Rekorde, Routinen und Gewohnheiten zur behaltenen Übung. Spätere Importe landen automatisch dort.</p>
+      {items.map((d) => (
+        <div key={d.drop.id} className="dupe-row">
+          <span><strong>{d.drop.name}</strong> <span className="muted small">({d.drop_sets} Sätze)</span></span>
+          <span className="muted">→</span>
+          <span><strong>{d.keep.name}</strong> <span className="muted small">({d.keep.custom ? `${d.keep_sets} Sätze` : "eingebaut"})</span></span>
+          <span className="tiny muted">{d.reason}</span>
+          <button className="btn small primary" disabled={busy === d.drop.id} onClick={() => merge(d)}>Zusammenführen</button>
+        </div>
+      ))}
+    </section>
   );
 }

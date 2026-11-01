@@ -818,3 +818,34 @@ details > summary { list-style-position: inside; }
 .media-pick .ex-thumb { width: 100% !important; height: 80px !important; }
 @media (max-width: 800px) { .ex-hero { grid-template-columns: 1fr; } }
 .ex-title { display: flex; align-items: center; gap: 0.6rem; }
+.live-muscles { padding: 0.8rem 1rem; margin-bottom: 1rem; }
+.live-muscles summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; list-style: none; }
+.live-muscles summary::-webkit-details-marker { display: none; }
+.live-muscles summary::after { content: "▾"; margin-left: auto; color: var(--mute); }
+.live-muscles[open] summary { margin-bottom: 0.8rem; }
+.live-muscles[open] summary::after { content: "▴"; }
+.live-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+
+/* ---------- Muskelverteilung (Segmente) ---------- */
+
+.region-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0.8rem; }
+.region-card { padding: 0.9rem 1rem; border-radius: 12px; background: var(--ink-2); border: 1px solid var(--line); }
+.region-card p { margin: 0.5rem 0 0; color: var(--mute); }
+.region-top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.region-nums { display: flex; gap: 1.4rem; margin-top: 0.5rem; }
+.region-nums span { display: flex; flex-direction: column; }
+.region-nums b { font-family: var(--font-display); font-size: 1.35rem; }
+.region-nums small { font-size: 0.74rem; color: var(--mute); }
+.segment-map { display: grid; gap: 0.5rem; padding: 0.8rem; border-radius: 10px; background: var(--ink-2); }
+.segment-row { flex-direction: row; justify-content: space-between; align-items: center; gap: 1rem; font-weight: 400; }
+.segment-row select { width: auto; }
+.move-anim { display: inline-grid; place-items: center; flex: none; border-radius: 10px; background: var(--ink-2); border: 1px solid var(--line); overflow: hidden; }
+.move-anim svg { width: 88%; height: 88%; }
+.mv-body { fill: none; stroke: var(--c, var(--c-activity)); stroke-width: 6.5; stroke-linecap: round; stroke-linejoin: round; }
+.mv-head { fill: var(--c, var(--c-activity)); }
+.mv-weight { fill: none; stroke: var(--chalk); stroke-width: 3; opacity: 0.8; }
+.mv-ground { stroke: var(--line-2); stroke-width: 2; }
+.mv-bench { stroke: var(--line-2); stroke-width: 5; stroke-linecap: round; }
+.ex-hero .move-anim { width: 100% !important; height: auto !important; aspect-ratio: 4 / 3; border-radius: var(--r-panel); }
+.dupe-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.5rem 0; border-top: 1px solid var(--line); }
+.dupe-row .btn { margin-left: auto; }
