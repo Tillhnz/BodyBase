@@ -1,10 +1,17 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { api } from "../api.js";
 import { fmtDate, fmtNum } from "../fmt.js";
 import { Sparkline } from "./charts.jsx";
 import { toast } from "./feedback.jsx";
 import { Segmented } from "./ui.jsx";
 
+const Body3D = lazy(() => import("./Body3D.jsx"));
+const MODES = [{ value: "muscle", label: "Muskelanteil" }, { value: "fat", label: "Fettanteil" }, { value: "change", label: "Veränderung" }];
+const LEGEND = {
+  muscle: "Je kräftiger die Farbe, desto höher der Muskelanteil im Segment.",
+  fat: "Je kräftiger die Farbe, desto höher der Fettanteil im Segment.",
+  change: "Grün: Muskelmasse gestiegen, rot: gesunken (im gewählten Zeitraum).",
+};
 const RANGES = [{ value: 30, label: "30 Tage" }, { value: 90, label: "90 Tage" }, { value: 180, label: "6 Monate" }, { value: 365, label: "1 Jahr" }];
 
 function Change({ v, unit = "kg", invert = false }) {
@@ -19,8 +26,23 @@ export default function Segments() {
   const [days, setDays] = useState(90);
   const [data, setData] = useState(null);
   const [mapping, setMapping] = useState(false);
+  const [mode, setMode] = useState("muscle");
+  const [values3d, setValues3d] = useState(null);
   useEffect(() => { api.get(`/body-segments?days=${days}`).then(setData).catch(() => setData({ has_data: false })); }, [days]);
-  if (!data?.has_data) return null;
+  useEffect(() => {
+    if (!data?.has_data) return;
+    import("./Body3D.jsx").then((m) => setValues3d(m.segmentValues(data.segments, mode))).catch(() => {});
+  }, [data, mode]);
+  if (!data) return null;
+  if (!data.has_data) {
+    return (
+      <section className="panel cat-body segments">
+        <h2>Muskel- und Fettverteilung</h2>
+        <p className="muted small">Noch keine Messungen je Körperbereich. Die kommen von Withings-Waagen mit Segmentmessung (Body Scan, Body Segment).
+          Ist Withings verbunden, unter Quellen → Withings einmal „Alles neu holen“, damit auch ältere Messungen ankommen.</p>
+      </section>
+    );
+  }
 
   async function relabel(pos, part) {
     const labels = Object.fromEntries(data.segments.map((s) => [String(s.position), s.part]));
@@ -38,11 +60,19 @@ export default function Segments() {
   return (
     <section className="panel cat-body segments">
       <div className="panel-head">
-        <h2>Muskelverteilung</h2>
+        <h2>Muskel- und Fettverteilung</h2>
         <Segmented value={days} onChange={setDays} options={RANGES} label="Zeitraum" />
       </div>
       <p className="small muted" style={{ marginTop: 0 }}>Muskel- und Fettmasse je Körperbereich von deiner Waage, verglichen mit dem Training in diesem Zeitraum (Krafttraining, Ausdauer, Gewohnheiten).</p>
-      <div className="region-grid">
+      <div className="seg-3d">
+        <div>
+          <Segmented value={mode} onChange={setMode} options={MODES} label="Darstellung" />
+          <Suspense fallback={<p className="muted small">Lade 3D-Modell …</p>}>
+            <Body3D values={values3d} mode={mode} height={380} />
+          </Suspense>
+          <p className="tiny muted" style={{ textAlign: "center", margin: 0 }}>{LEGEND[mode]}</p>
+        </div>
+        <div className="region-grid">
         {data.regions.map((r) => (
           <div key={r.region} className="region-card">
             <div className="region-top"><strong>{r.region}</strong><span className="muted small">{fmtNum(r.muscle_kg, 1)} kg Muskeln</span></div>
@@ -53,6 +83,7 @@ export default function Segments() {
             <p className="small">{r.comment}</p>
           </div>
         ))}
+        </div>
       </div>
       <div className="table-wrap" style={{ marginTop: "1rem" }}>
         <table className="table compact">
