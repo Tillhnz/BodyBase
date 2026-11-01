@@ -7,6 +7,7 @@ import { fmtNum } from "../fmt.js";
 import BodyMap, { valuesFromBlocks } from "../components/BodyMap.jsx";
 import Linked from "../components/Linked.jsx";
 import BlockEditor from "./BlockEditor.jsx";
+import ExerciseThumb from "./ExerciseThumb.jsx";
 import {
   e1rm, fmtClock, fmtKg, fmtVolume, fromDraftBlock, loadExercises, setText, startWorkout, toDraftBlock, useExercises,
 } from "./shared.js";
@@ -137,7 +138,8 @@ export default function WorkoutDetail() {
           return (
             <section key={i} className={`panel${b.superset != null ? " in-superset" : ""}`}>
               <div className="panel-head">
-                <h3><Link className="link" to={`/strength/exercise/${b.exercise_id}`}>{b.name}</Link></h3>
+                <h3 className="ex-title"><ExerciseThumb media={ex.byId.get(b.exercise_id)?.media} name={b.name} size={40} />
+                  <Link className="link" to={`/strength/exercise/${b.exercise_id}`}>{b.name}</Link></h3>
                 {b.superset != null && <span className="pill iris">Supersatz {b.superset + 1}</span>}
               </div>
               {b.notes && <p className="small muted" style={{ marginTop: 0 }}>{b.notes}</p>}

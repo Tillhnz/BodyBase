@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import ExercisePicker from "./ExercisePicker.jsx";
+import ExerciseThumb from "./ExerciseThumb.jsx";
 import {
   GROUP_COLORS, REST_OPTIONS, SET_TYPES, colLabel, columnsFor, emptySet, fmtClock, fmtRest, newKey, parseNum, setText, toDraftBlock,
 } from "./shared.js";
@@ -105,7 +106,7 @@ function ExerciseBlock({ block, index, count, mode, ex, meta, previous, onChange
   return (
     <section className={`panel block${block.superset != null ? " in-superset" : ""}${nextInSuperset ? " superset-next" : ""}`} style={{ "--c": groupColor }}>
       <div className="block-head">
-        <span className="ex-dot" aria-hidden="true">{(ex?.name || "?").slice(0, 1)}</span>
+        <ExerciseThumb media={ex?.media} name={ex?.name} size={46} color={groupColor} />
         <div className="block-title">
           {ex ? <Link to={`/strength/exercise/${ex.id}`} className="link">{ex.name}</Link> : <strong>Übung</strong>}
           <div className="tiny muted">

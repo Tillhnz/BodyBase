@@ -203,6 +203,8 @@ class Exercise(Base):
     secondary: Mapped[list | None] = mapped_column(JSON, nullable=True)
     kind: Mapped[str] = mapped_column(String(20), default="weight_reps")  # weight_reps | bodyweight | weighted_bw | assisted_bw | duration | distance
     archived: Mapped[bool | None] = mapped_column(Boolean, default=False, nullable=True)
+    media: Mapped[str | None] = mapped_column(String(80), nullable=True)  # Kennung in free-exercise-db (Bilder, Anleitung)
+    media_checked: Mapped[bool | None] = mapped_column(Boolean, default=False, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 

@@ -802,3 +802,19 @@ details > summary { list-style-position: inside; }
 .load-filter .chip.on { background: var(--c, var(--iris)); border-color: var(--c, var(--iris)); color: var(--ink); }
 .load-filter .chip.on i { background: var(--ink); }
 @media (max-width: 800px) { .load-filter .chip-sub { display: none; } }
+
+/* ---------- Übungsbilder ---------- */
+
+.ex-thumb { position: relative; flex: none; display: inline-block; border-radius: 10px; overflow: hidden; background: #fff; border: 1px solid var(--line); }
+.ex-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 0.35s ease; }
+.ex-thumb img + img { opacity: 0; }
+.ex-thumb img.show { opacity: 1; }
+.ex-hero { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+.ex-hero .ex-thumb { width: 100% !important; height: auto !important; aspect-ratio: 4 / 3; border-radius: var(--r-panel); }
+.ex-steps { margin: 0.5rem 0 0; padding-left: 1.2rem; display: grid; gap: 0.45rem; font-size: 0.92rem; }
+.media-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem; max-height: 46vh; overflow-y: auto; margin-top: 0.6rem; }
+.media-pick button { font: inherit; font-size: 0.75rem; color: var(--chalk); background: var(--ink-2); border: 1px solid var(--line); border-radius: 10px; padding: 0.35rem; cursor: pointer; display: grid; gap: 0.3rem; text-align: left; }
+.media-pick button.on { border-color: var(--iris); }
+.media-pick .ex-thumb { width: 100% !important; height: 80px !important; }
+@media (max-width: 800px) { .ex-hero { grid-template-columns: 1fr; } }
+.ex-title { display: flex; align-items: center; gap: 0.6rem; }

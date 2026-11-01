@@ -7,6 +7,7 @@ import { EmptyState, Kpi, Segmented, useAsync } from "../components/ui.jsx";
 import { fmtDate, fmtNum } from "../fmt.js";
 import BodyMap from "../components/BodyMap.jsx";
 import { ExerciseForm } from "./ExercisePicker.jsx";
+import ExerciseThumb from "./ExerciseThumb.jsx";
 import { GROUP_COLORS, fmtClock, fmtKg, fmtVolume, loadExercises, setText, useExercises } from "./shared.js";
 
 const GROUPS = ["Brust", "Rücken", "Schultern", "Arme", "Beine", "Rumpf", "Ganzkörper", "Ausdauer", "Sonstiges"];
@@ -48,7 +49,7 @@ export function ExerciseLibrary() {
       <div className="ex-grid">
         {list.map((e) => (
           <Link key={e.id} to={`/strength/exercise/${e.id}`} className="ex-row" style={{ "--c": GROUP_COLORS[e.group] }}>
-            <span className="ex-dot" aria-hidden="true">{e.name.slice(0, 1)}</span>
+            <ExerciseThumb media={e.media} name={e.name} size={48} color={GROUP_COLORS[e.group]} />
             <span className="ex-row-main">
               <strong>{e.name}</strong>
               <span className="tiny muted">{ex.meta.muscles[e.primary]} · {ex.meta.equipment[e.equipment]}{e.custom ? " · eigene" : ""}</span>
@@ -123,12 +124,26 @@ export function ExerciseDetail() {
           </div>
         )}
       </div>
-      <section className="panel ex-muscles">
-        <BodyMap values={{ ...Object.fromEntries(e.secondary.map((m) => [m, 1])), [e.primary]: 2 }} unit="" list={false} size="sm" />
-        <div>
-          <p style={{ marginTop: 0 }}><strong>Hauptmuskel:</strong> {exs.meta.muscles[e.primary]}</p>
-          <p><strong>Weitere:</strong> {e.secondary.length ? e.secondary.map((x) => exs.meta.muscles[x]).join(", ") : "keine"}</p>
-          {e.primary === "other" && <p className="hint">Noch keinem Muskel zugeordnet.{e.custom ? " Unter „Bearbeiten“ festlegen, dann zählt die Übung in Körperkarte und Auswertung." : ""}</p>}
+      <section className="panel ex-hero">
+        <ExerciseThumb media={e.media} name={e.name} size={320} animate color={GROUP_COLORS[e.group]} />
+        <div className="stack" style={{ gap: "0.8rem" }}>
+          <div className="ex-muscles">
+            <BodyMap values={{ ...Object.fromEntries(e.secondary.map((m) => [m, 1])), [e.primary]: 2 }} unit="" list={false} size="sm" />
+            <div>
+              <p style={{ marginTop: 0 }}><strong>Hauptmuskel:</strong> {exs.meta.muscles[e.primary]}</p>
+              <p><strong>Weitere:</strong> {e.secondary.length ? e.secondary.map((x) => exs.meta.muscles[x]).join(", ") : "keine"}</p>
+              <p className="small muted">{exs.meta.equipment[e.equipment]} · {exs.meta.kinds[e.kind]}</p>
+              {e.primary === "other" && <p className="hint">Noch keinem Muskel zugeordnet.{e.custom ? " Unter „Bearbeiten“ festlegen, dann zählt die Übung in Körperkarte und Auswertung." : ""}</p>}
+            </div>
+          </div>
+          {data.media?.instructions?.length > 0 && (
+            <details open={!data.sessions.length}>
+              <summary className="small" style={{ cursor: "pointer" }}><strong>Ausführung</strong> <span className="muted">(Anleitung auf Englisch)</span></summary>
+              <ol className="ex-steps" lang="en">{data.media.instructions.map((t, i) => <li key={i}>{t}</li>)}</ol>
+              <p className="tiny muted">Bilder und Anleitung: {data.media.source}</p>
+            </details>
+          )}
+          {!e.media && <p className="hint">Für diese Übung gibt es noch kein Bild.{e.custom ? " Unter „Bearbeiten“ kannst du eins aus der Bilddatenbank wählen." : ""}</p>}
         </div>
       </section>
       {!data.sessions.length ? (

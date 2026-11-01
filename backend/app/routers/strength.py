@@ -44,6 +44,26 @@ def _usage(db: Session, user_id: int) -> dict:
     return {eid: {"count": n, "last": last.isoformat() + "Z" if last else None} for eid, n, last in rows}
 
 
+@router.get("/media/search")
+def media_search(q: str = "", user: User = Depends(current_user)):
+    """Übungen der freien Bilddatenbank suchen (für eigene Übungen)."""
+    from .. import strength_media
+    return strength_media.search(q)
+
+
+@router.get("/media/{media_id}/{n}.jpg")
+def media_image(media_id: str, n: int, user: User = Depends(current_user)):
+    """Foto der Übung (0 = Start-, 1 = Endposition), beim ersten Abruf von GitHub geladen und zwischengespeichert."""
+    from fastapi.responses import FileResponse
+
+    from .. import strength_media
+    from ..config import settings
+    path = strength_media.image_path(settings.data_dir, media_id, n)
+    if not path:
+        raise HTTPException(404, "Kein Bild")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=2592000, immutable"})
+
+
 @router.get("/exercises")
 def list_exercises(user: User = Depends(current_user), db: Session = Depends(get_db)):
     usage = _usage(db, user.id)
@@ -73,7 +93,11 @@ def _exercise_values(data: dict) -> dict:
 
 @router.post("/exercises", status_code=201)
 def create_exercise(body: Body, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    e = Exercise(user_id=user.id, aliases=[], **_exercise_values(_payload(body)))
+    from .. import strength_media
+    data = _payload(body)
+    values = _exercise_values(data)
+    media = data.get("media") if data.get("media") in strength_media.index() else strength_media.match([values["name"]], values["equipment"])
+    e = Exercise(user_id=user.id, aliases=[], media=media, media_checked=True, **values)
     db.add(e)
     db.commit()
     return S.exercise_dict(e)
@@ -89,6 +113,12 @@ def update_exercise(exercise_id: int, body: Body, user: User = Depends(current_u
         setattr(e, k, v)
     if "archived" in data:
         e.archived = bool(data["archived"])
+    if "media" in data:
+        from .. import strength_media
+        m = data.get("media") or None
+        if m is not None and m not in strength_media.index():
+            raise HTTPException(422, "Unbekanntes Bild")
+        e.media, e.media_checked = m, True
     db.commit()
     return S.exercise_dict(e)
 

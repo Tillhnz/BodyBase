@@ -26,6 +26,8 @@ async def lifespan(app: FastAPI):
         from .strength import assign_unknown_muscles, seed_catalog
         seed_catalog(db)
         assign_unknown_muscles(db)
+        from .strength import assign_media
+        assign_media(db)
         sports.migrate(db)
     audit.event("System", "server.start", f"BodyBase {__version__} gestartet")
     sync.start_background()

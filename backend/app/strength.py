@@ -37,7 +37,29 @@ def seed_catalog(db: Session) -> None:
             db.add(row)
         row.name, row.equipment, row.primary = item["name"], item["equipment"], item["primary"]
         row.secondary, row.kind, row.aliases = item["secondary"], item["kind"], item["aliases"]
+        from . import strength_media
+        row.media = strength_media.media_for_catalog(item["key"], [*item["aliases"], item["name"]], item["equipment"])
+        row.media_checked = True
     db.commit()
+
+
+def assign_media(db: Session) -> int:
+    """Eigene Übungen (z. B. aus Hevy) mit Bildern verknüpfen; ohne Muskelzuordnung auch die Muskeln übernehmen."""
+    from . import strength_media
+    n = 0
+    for e in db.scalars(select(Exercise).where(Exercise.user_id.is_not(None), Exercise.media_checked.is_not(True))):
+        e.media_checked = True
+        mid = strength_media.match([e.name, *(e.aliases or [])], e.equipment)
+        if not mid:
+            continue
+        e.media = mid
+        n += 1
+        if e.primary == "other":
+            mus = strength_media.muscles_of(mid)
+            if mus:
+                e.primary, e.secondary = mus
+    db.commit()
+    return n
 
 
 def assign_unknown_muscles(db: Session) -> int:
@@ -71,6 +93,7 @@ def exercise_dict(e: Exercise, usage: dict | None = None) -> dict:
         "id": e.id, "name": e.name, "equipment": e.equipment, "primary": e.primary, "secondary": e.secondary or [],
         "kind": e.kind, "custom": e.user_id is not None, "archived": bool(e.archived), "aliases": e.aliases or [],
         "group": MUSCLE_GROUPS.get(e.primary, "Sonstiges"), "count": u.get("count", 0), "last": u.get("last"),
+        "media": e.media,
     }
 
 
@@ -111,8 +134,12 @@ class Matcher:
         primary, secondary = guess if guess else ("other", [])
         if primary == "cardio" and not kind_hint:
             kind = "distance"
+        from . import strength_media
+        mid = strength_media.match([name], equipment)
+        if primary == "other" and mid and strength_media.muscles_of(mid):
+            primary, secondary = strength_media.muscles_of(mid)
         e = Exercise(user_id=self.user_id, name=name.strip()[:120], equipment=equipment, primary=primary, secondary=secondary,
-                     kind=kind, aliases=[])
+                     kind=kind, aliases=[], media=mid, media_checked=True)
         self.db.add(e)
         self.db.flush()
         self.by_name[key] = e
@@ -496,7 +523,9 @@ def exercise_stats(db: Session, user_id: int, e: Exercise) -> dict:
     reps_sorted = sorted(rep_records.values(), key=lambda r: r["reps"])
     total = {"sessions": len(sessions), "sets": sum(len([s for s in x["sets"] if s["type"] != "warmup"]) for x in sessions),
              "reps": sum(x["reps"] or 0 for x in sessions), "volume": round(sum(x["volume"] or 0 for x in sessions), 1)}
-    return {"exercise": exercise_dict(e), "sessions": sessions, "records": records, "rep_records": reps_sorted,
+    from . import strength_media
+    return {"exercise": exercise_dict(e), "media": strength_media.info(e.media), "sessions": sessions, "records": records,
+            "rep_records": reps_sorted,
             "total": total}
 
 

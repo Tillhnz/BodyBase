@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../api.js";
 import { toast } from "../components/feedback.jsx";
 import { Modal } from "../components/ui.jsx";
+import ExerciseThumb from "./ExerciseThumb.jsx";
 import { GROUP_COLORS, loadExercises, useExercises } from "./shared.js";
 
 const GROUPS = ["Brust", "Rücken", "Schultern", "Arme", "Beine", "Rumpf", "Ganzkörper", "Ausdauer"];
@@ -39,7 +40,7 @@ export default function ExercisePicker({ onClose, onPick, multi = true, title = 
 
   const row = (e) => (
     <button type="button" key={e.id} className={`ex-row${picked.includes(e.id) ? " on" : ""}`} onClick={() => toggle(e.id)}>
-      <span className="ex-dot" style={{ "--c": GROUP_COLORS[e.group] }} aria-hidden="true">{e.name.slice(0, 1)}</span>
+      <ExerciseThumb media={e.media} name={e.name} size={44} color={GROUP_COLORS[e.group]} />
       <span className="ex-row-main">
         <strong>{e.name}</strong>
         <span className="tiny muted">{ex.meta.muscles[e.primary] || e.primary} · {ex.meta.equipment[e.equipment] || e.equipment}{e.custom ? " · eigene" : ""}</span>
@@ -125,11 +126,49 @@ export function ExerciseForm({ initial = {}, onClose, onSaved }) {
             ))}
           </div>
         </div>
+        <MediaChooser value={v.media} name={v.name} onChange={(m) => setV({ ...v, media: m })} />
         <div className="actions">
           <button className="btn primary" disabled={busy}>{busy ? "Speichere …" : "Speichern"}</button>
           <button type="button" className="btn" onClick={onClose}>Abbrechen</button>
         </div>
       </form>
     </Modal>
+  );
+}
+
+
+/** Bild aus der freien Übungsdatenbank wählen (Fotos von Start- und Endposition). */
+function MediaChooser({ value, name, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState(name || "");
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const t = setTimeout(() => api.get(`/strength/media/search?q=${encodeURIComponent(q)}`).then(setItems).catch(() => setItems([])), 250);
+    return () => clearTimeout(t);
+  }, [q, open]);
+  return (
+    <div>
+      <div className="field-label">Bild</div>
+      <div className="actions" style={{ marginTop: 0 }}>
+        <ExerciseThumb media={value} name={name} size={56} animate />
+        <button type="button" className="btn small" onClick={() => setOpen(!open)}>{open ? "Schließen" : value ? "Anderes Bild" : "Bild suchen"}</button>
+        {value && <button type="button" className="link quiet small" onClick={() => onChange(null)}>ohne Bild</button>}
+      </div>
+      {open && (
+        <>
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Englischer Name, z. B. lunge, curl, row" style={{ marginTop: "0.6rem" }} />
+          <div className="media-pick">
+            {items.map((m) => (
+              <button type="button" key={m.id} className={value === m.id ? "on" : ""} onClick={() => { onChange(m.id); setOpen(false); }}>
+                <ExerciseThumb media={m.id} name={m.name} size={80} />
+                <span>{m.name}</span>
+              </button>
+            ))}
+            {!items.length && <p className="muted small">Nichts gefunden.</p>}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

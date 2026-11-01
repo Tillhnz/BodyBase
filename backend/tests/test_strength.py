@@ -303,3 +303,26 @@ def test_german_names_get_muscles():
     from app.strength_catalog import guess_muscles
     assert guess_muscles("Knieheben am Barren")[0] == "abs"
     assert guess_muscles("Nackendrücken")[0] == "shoulders"
+
+
+def test_exercise_media(client, auth):
+    from app import strength_media
+    from app.strength_catalog import CATALOG
+    idx = strength_media.index()
+    assert len(idx) > 800
+    assert all(v in idx for v in strength_media.OVERRIDES.values() if v)
+    with_media = [c for c in CATALOG if strength_media.media_for_catalog(c["key"], [*c["aliases"], c["name"]], c["equipment"])]
+    assert len(with_media) >= len(CATALOG) - 3
+    items = client.get("/api/strength/exercises", headers=auth).json()
+    bench = next(e for e in items if e["name"] == "Bankdrücken (Langhantel)")
+    assert bench["media"] == "Barbell_Bench_Press_-_Medium_Grip"
+    detail = client.get(f"/api/strength/exercises/{bench['id']}", headers=auth).json()
+    assert detail["media"]["instructions"]
+    assert client.get("/api/strength/media/..%2Fetc/0.jpg", headers=auth).status_code == 404
+    assert client.get("/api/strength/media/Nicht_Vorhanden/0.jpg", headers=auth).status_code == 404
+    res = client.get("/api/strength/media/search?q=lunge", headers=auth).json()
+    assert any("Lunge" in r["name"] for r in res)
+    custom = client.post("/api/strength/exercises", json={"name": "Wide-Grip Lat Pulldown", "equipment": "cable", "primary": "lats"}, headers=auth).json()
+    assert custom["media"] == "Wide-Grip_Lat_Pulldown"
+    r = client.put(f"/api/strength/exercises/{custom['id']}", json={**custom, "media": "gibt-es-nicht"}, headers=auth)
+    assert r.status_code == 422
