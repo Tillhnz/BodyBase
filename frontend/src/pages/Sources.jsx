@@ -263,7 +263,8 @@ function PushSetup({ p }) {
     toast("Neuer Schlüssel erzeugt");
   }
   const hae = p.key === "apple_health";
-  const url = hae ? data.urls.health_auto_export : data.urls.json;
+  const hc = p.key === "health_connect";
+  const url = hae ? data.urls.health_auto_export : hc ? (data.urls.health_connect || data.urls.json) : data.urls.json;
   const example = `curl -X POST ${data.urls.json} \\
   -H "Authorization: Bearer ${data.token}" \\
   -H "Content-Type: application/json" \\
@@ -275,9 +276,11 @@ function PushSetup({ p }) {
       <Steps items={p.setup} />
       <label>Adresse<CopyField value={url} /></label>
       <label>Schlüssel {hae && <span className="hint">(in Health Auto Export als Header „Authorization“ mit „Bearer “ davor)</span>}
+        {hc && <span className="hint">(in HC Webhook unter „Headers“: Name <code>X-API-Key</code>, Wert dieser Schlüssel)</span>}
         <CopyField value={data.token} />
       </label>
-      {!hae && <div><div className="field-label small muted">Beispiel</div><pre className="code">{example}</pre>
+      {hc && <p className="hint">Ob die Übertragung klappt, zeigt HC Webhook im Webhook-Protokoll. Hier bei der Quelle siehst du, wann zuletzt Daten ankamen.</p>}
+      {!hae && !hc && <div><div className="field-label small muted">Beispiel</div><pre className="code">{example}</pre>
         <p className="hint">Messgrößen: weight, body_fat, resting_hr, hrv, steps, sleep_duration, glucose … (Liste unter Trends). Außerdem „activities“ und „sleep“.</p></div>}
       <div><button className="link small" onClick={rotate}>Neuen Schlüssel erzeugen</button></div>
     </div>

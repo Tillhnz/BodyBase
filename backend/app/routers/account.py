@@ -83,6 +83,7 @@ def ingest_info(user: User) -> dict:
         "token": token,
         "urls": {
             "health_auto_export": f"{base}/api/ingest/health-auto-export",
+            "health_connect": f"{base}/api/ingest/health-connect",
             "json": f"{base}/api/ingest/json",
         },
         "header": "Authorization: Bearer <Schlüssel>",

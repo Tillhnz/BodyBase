@@ -224,6 +224,19 @@ async def ingest_hae(request: Request, db: Session = Depends(get_db)):
     return {"ok": True, "counts": counts}
 
 
+@router.post("/ingest/health-connect")
+async def ingest_health_connect(request: Request, db: Session = Depends(get_db)):
+    """Daten der Android-App „HC Webhook“ (Health Connect: Google Fit, Samsung Health, Fitbit, Xiaomi, Zepp …)."""
+    from ..importers import hcwebhook
+    user = _ingest_user(request, db)
+    data = await _json_body(request)
+    w = Writer(db, user.id, "health_connect")
+    info = hcwebhook.ingest(w, data)
+    counts = w.flush()
+    _touch(db, user.id, "health_connect", counts, "webhook")
+    return {"ok": True, "counts": counts, **info}
+
+
 ALLOWED_PUSH_SOURCES = {"api", "health_connect"}
 
 
@@ -231,6 +244,13 @@ ALLOWED_PUSH_SOURCES = {"api", "health_connect"}
 async def ingest_generic(request: Request, db: Session = Depends(get_db)):
     user = _ingest_user(request, db)
     data = await _json_body(request)
+    from ..importers import hcwebhook
+    if hcwebhook.looks_like(data):  # HC Webhook an die allgemeine Adresse geschickt: trotzdem verstehen
+        w = Writer(db, user.id, "health_connect")
+        info = hcwebhook.ingest(w, data)
+        counts = w.flush()
+        _touch(db, user.id, "health_connect", counts, "webhook")
+        return {"ok": True, "counts": counts, **info}
     source = data.get("source") if data.get("source") in ALLOWED_PUSH_SOURCES else "api"
     w = Writer(db, user.id, source)
     tabular.ingest_json(w, data)

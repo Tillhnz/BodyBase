@@ -29,12 +29,16 @@ class HealthConnect(Provider):
     initials = "HC"
     website = "https://health.google/health-connect-android/"
     delivers = ["activity", "sleep", "heart", "body", "nutrition"]
-    summary = "Samsung Health, Google Fit, Xiaomi, Zepp & Co. landen in Health Connect. Von dort über eine Weiterleitungs-App zu BodyBase."
+    summary = "Google Fit, Samsung Health, Fitbit, Xiaomi, Zepp, Oura & Co. landen auf dem Handy in Health Connect. Die App „HC Webhook“ schickt alles automatisch an BodyBase."
     setup = [
-        "Health Connect hat keine Online-Schnittstelle. Eine Automatisierungs-App (z. B. Tasker oder eine Health-Connect-Export-App "
-        "mit Webhook) schickt die Werte im BodyBase-JSON-Format an die Adresse unten.",
-        "Alternativ synchronisiert „Health Sync“ Health Connect mit Fitbit, Garmin oder Strava; diese verbindest du direkt.",
+        "Auf dem Android-Handy die App „HC Webhook“ installieren (Google Play oder github.com/mcnaveen/health-connect-webhook).",
+        "In der App den Zugriff auf Health Connect erlauben und unter „Data Types“ auswählen, was übertragen werden soll.",
+        "Unter „Webhooks“ einen neuen Webhook anlegen: Adresse unten einfügen, Format JSON.",
+        "Bei „Headers“ den Namen „X-API-Key“ und als Wert den Schlüssel unten eintragen. Mit „Test“ prüfen.",
+        "Unter „Sync“ ein Intervall wählen (z. B. alle 30 Minuten). Fertig: Neue Werte kommen von selbst.",
     ]
+    note = ("Google schaltet die alte Google-Fit-Schnittstelle Ende 2026 ab. Health Connect ist der Nachfolger und läuft nur auf dem Handy, "
+            "deshalb braucht es die kleine Weiterleitungs-App. Tipp: In HC Webhook den Puls auf „1 Minute“ stellen, das spart Datenvolumen.")
 
 
 class Api(Provider):
