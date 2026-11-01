@@ -8,21 +8,23 @@ def test_body_segments_auto_labels_and_regions(client, auth, db):
     u = db.get(User, me["id"])
     assert client.get("/api/body-segments", headers=auth).json() == {"has_data": False}
     t0 = datetime.utcnow().replace(microsecond=0) - timedelta(days=60)
-    # Codes wie von der Waage: Rumpf ~27 kg, Beine ~10 kg, Arme ~3,5 kg Muskeln
-    base = {11: 27.0, 12: 10.0, 13: 10.1, 14: 3.4, 15: 3.5}
+    # Withings-Codes: 12 Rumpf, 10/11 Beine, 2/3 Arme; 99 unbekannt (wird nach Größe zugeordnet)
+    base = {12: 27.0, 10: 10.0, 11: 10.1, 2: 3.4, 3: 3.5, 99: 3.0}
     for i, ts in enumerate([t0, t0 + timedelta(days=55)]):
         for pos, v in base.items():
-            gain = 0.3 if pos in (12, 13) and i else 0
+            gain = 0.3 if pos in (10, 11) and i else 0
             segments.store(db, u.id, "withings", ts, "muscle", pos, v + gain)
             segments.store(db, u.id, "withings", ts, "fat", pos, 2.0 - 0.1 * i)
     db.commit()
     r = client.get("/api/body-segments?days=90", headers=auth).json()
     parts = {s["position"]: s["part"] for s in r["segments"]}
-    assert parts[11] == "torso" and parts[12] == "leg" and parts[14] == "arm"
+    assert parts[12] == "torso" and parts[10] == "left_leg" and parts[11] == "right_leg"
+    assert parts[2] == "right_arm" and parts[3] == "left_arm" and parts[99] in ("torso", "leg", "arm")
     legs = next(x for x in r["regions"] if x["region"] == "Beine")
     assert legs["change_kg"] == 0.6 and legs["comment"]
-    r = client.put("/api/body-segments/labels", json={"labels": {"12": "left_leg", "13": "right_leg"}}, headers=auth).json()
-    assert {s["label"] for s in r["segments"]} >= {"Linkes Bein", "Rechtes Bein"} and r["custom_labels"]
+    assert {s["label"] for s in r["segments"]} >= {"Linkes Bein", "Rechtes Bein", "Rumpf", "Linker Arm", "Rechter Arm"}
+    r = client.put("/api/body-segments/labels", json={"labels": {"99": "ignore"}}, headers=auth).json()
+    assert next(s for s in r["segments"] if s["position"] == 99)["part"] == "ignore" and r["custom_labels"]
     assert client.put("/api/body-segments/labels", json={"labels": {"12": "kopf"}}, headers=auth).status_code == 422
 
 

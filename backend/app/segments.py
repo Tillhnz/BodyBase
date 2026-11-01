@@ -1,8 +1,9 @@
 """Körperzusammensetzung je Segment und ihr Zusammenhang mit dem Training.
 
-Withings liefert Muskel-, Fett- und fettfreie Masse je Segment mit einem Segment-Code. Welcher Code welcher Körperteil
-ist, ist nicht öffentlich dokumentiert. BodyBase ordnet deshalb nach Größe zu (größter Wert = Rumpf, die nächsten zwei =
-Beine, die kleinsten zwei = Arme); unter Gesundheit lässt sich das je Code ändern (gespeichert in prefs.segment_labels).
+Withings liefert Muskel-, Fett- und fettfreie Masse je Segment; das Feld „position“ nennt den Körperteil
+(Werte wie in aiowithings/Home Assistant und withoutings: 2 rechter Arm, 3 linker Arm, 10 linkes Bein, 11 rechtes Bein,
+12 Rumpf). Unbekannte Codes werden nach Größe zugeordnet; unter Gesundheit lässt sich jede Zuordnung ändern
+(gespeichert in prefs.segment_labels).
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 from .models import BodySegment, User
 from .timeutil import local_day
 
+WITHINGS_POSITIONS = {2: "right_arm", 3: "left_arm", 10: "left_leg", 11: "right_leg", 12: "torso"}
 KINDS = {"muscle": "Muskelmasse", "fat": "Fettmasse", "ffm": "Fettfreie Masse"}
 PARTS = {"torso": "Rumpf", "left_arm": "Linker Arm", "right_arm": "Rechter Arm", "left_leg": "Linkes Bein",
          "right_leg": "Rechtes Bein", "arm": "Arm", "leg": "Bein", "ignore": "Nicht verwenden"}
@@ -57,7 +59,9 @@ def auto_labels(rows: list[BodySegment]) -> dict[int, str]:
 
 
 def labels_for(user: User, rows: list) -> tuple[dict[int, str], bool]:
-    auto = auto_labels(rows)
+    known = {r.position: WITHINGS_POSITIONS[r.position] for r in rows if r.position in WITHINGS_POSITIONS}
+    unknown = [r for r in rows if r.position not in WITHINGS_POSITIONS]
+    auto = {**(auto_labels(unknown) if unknown else {}), **known}
     custom = {int(k): v for k, v in ((user.prefs or {}).get("segment_labels") or {}).items() if v in PARTS}
     return {**auto, **custom}, bool(custom)
 

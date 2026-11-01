@@ -70,10 +70,10 @@ export default function Segments() {
         </table>
       </div>
       <p className="hint">{data.measurements} Messungen, zuletzt {fmtDate(data.segments[0]?.muscle?.last_day || data.segments[0]?.fat?.last_day)}.
-        {" "}<button className="link quiet small" onClick={() => setMapping(!mapping)}>{mapping ? "Zuordnung schließen" : "Zuordnung der Bereiche prüfen"}</button></p>
+        {" "}<button className="link quiet small" onClick={() => setMapping(!mapping)}>{mapping ? "Zuordnung schließen" : "Zuordnung der Bereiche"}</button></p>
       {mapping && (
         <div className="segment-map">
-          <p className="small">Withings nennt die Bereiche nur als Nummer. BodyBase ordnet sie nach Größe zu (größter Wert = Rumpf, dann Beine, dann Arme), links und rechts lassen sich so nicht unterscheiden. Vergleiche mit der Withings-App und korrigiere bei Bedarf:</p>
+          <p className="small">Withings meldet die Bereiche als Nummer (2 rechter Arm, 3 linker Arm, 10 linkes Bein, 11 rechtes Bein, 12 Rumpf). Sollte etwas nicht zur Withings-App passen, kannst du es hier ändern:</p>
           {data.segments.map((s) => (
             <label key={s.position} className="segment-row">
               <span>Code {s.position} · {s.muscle ? `${fmtNum(s.muscle.last, 2)} kg Muskeln` : s.fat ? `${fmtNum(s.fat.last, 2)} kg Fett` : ""}</span>
