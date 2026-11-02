@@ -44,3 +44,12 @@ def test_hc_webhook(client, auth):
     r = client.post("/api/ingest/json", json=_payload(day - timedelta(days=1)), headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200 and r.json()["records"] >= 8
     assert date.today()
+
+
+def test_ingest_connection_check(client, auth):
+    token = client.get("/api/me/ingest", headers=auth).json()["token"]
+    r = client.get("/api/ingest/health-connect", headers={"X-API-Key": token})
+    assert r.status_code == 200 and r.json()["ok"]
+    assert client.head("/api/ingest/json", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    assert client.get("/api/ingest/health-connect", headers={"X-API-Key": "falsch"}).status_code == 401
+    assert client.get("/api/ingest/gibtsnicht", headers={"X-API-Key": token}).status_code == 404

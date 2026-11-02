@@ -224,6 +224,16 @@ async def ingest_hae(request: Request, db: Session = Depends(get_db)):
     return {"ok": True, "counts": counts}
 
 
+@router.api_route("/ingest/{kind}", methods=["GET", "HEAD"])
+def ingest_check(kind: str, request: Request, db: Session = Depends(get_db)):
+    """Verbindungstest für Apps (GET/HEAD auf eine Empfangsadresse): prüft nur den Schlüssel, speichert nichts."""
+    if kind not in ("health-connect", "json", "health-auto-export"):
+        raise HTTPException(404, "Unbekannte Empfangsadresse")
+    user = _ingest_user(request, db)
+    return {"ok": True, "message": "Verbindung steht. Daten bitte per POST als JSON senden.", "account": user.email,
+            "endpoint": kind}
+
+
 @router.post("/ingest/health-connect")
 async def ingest_health_connect(request: Request, db: Session = Depends(get_db)):
     """Daten der Android-App „HC Webhook“ (Health Connect: Google Fit, Samsung Health, Fitbit, Xiaomi, Zepp …)."""
