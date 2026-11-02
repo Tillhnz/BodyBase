@@ -166,7 +166,7 @@ def dashboard(user: User = Depends(current_user), db: Session = Depends(get_db))
                         "problems": [{"provider": c.provider, "name": providers.name_of(c.provider), "status": c.status,
                                       "error": c.last_error} for c in conns if c.status in ("error", "auth")]},
         "demo": any((c.config or {}).get("demo") for c in conns),
-        "has_data": db.scalar(select(Sample.id).where(Sample.user_id == user.id).limit(1)) is not None
+        "has_data": db.scalar(select(Sample.id).where(Sample.user_id == user.id, Sample.source != "bodybase").limit(1)) is not None
                     or bool(acts) or bool(sleep),
     }
 

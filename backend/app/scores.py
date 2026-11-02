@@ -18,10 +18,10 @@ import math
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from .models import Activity, SleepSession, User
+from .models import Activity, Sample, SleepSession, User
 from .store import Writer, daily_series, day_ts, priority_for, rank
 from .timeutil import today, tz
 
@@ -258,6 +258,9 @@ def refresh(db: Session, user: User, days: int = 90) -> None:
     """Schreibt die Tageswerte als Messgrößen (Quelle „bodybase“), damit sie in Trends und Auswertungen auftauchen."""
     t = today()
     ctx = Context(db, user, t - timedelta(days=days), t)
+    # alte Werte im Zeitraum entfernen: Tage ohne Grundlage (z. B. nach dem Löschen einer Quelle) verschwinden so mit
+    db.execute(delete(Sample).where(Sample.user_id == user.id, Sample.source == "bodybase", Sample.metric.in_(METRICS),
+                                    Sample.day > t - timedelta(days=days)))
     w = Writer(db, user.id, "bodybase")
     for i in range(days):
         d = t - timedelta(days=i)

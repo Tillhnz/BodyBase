@@ -259,7 +259,12 @@ def remove_demo(user: User = Depends(current_user), db: Session = Depends(get_db
             for model in (Sample, SleepSession, Activity):
                 db.execute(delete(model).where(model.user_id == user.id, model.source == c.provider))
             db.delete(c)
+    # daraus berechnete eigene Tageswerte gleich mit
+    from ..scores import METRICS
+    db.execute(delete(Sample).where(Sample.user_id == user.id, Sample.source == "bodybase", Sample.metric.in_(METRICS)))
     db.commit()
+    from .data import _scores_written
+    _scores_written.pop(user.id, None)
 
 
 @router.get("/meta")
