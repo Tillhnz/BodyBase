@@ -1,0 +1,45 @@
+name: Android-App
+
+on:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+      - name: APK bauen
+        working-directory: android
+        run: |
+          set -o pipefail
+          gradle --no-daemon assembleRelease -PversionCode=${{ github.run_number }} 2>&1 | tee build.log
+      - name: Veröffentlichen
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk BodyBase-Sync.apk
+          gh release delete android-latest --cleanup-tag --yes || true
+          gh release delete android-build-log --cleanup-tag --yes || true
+          gh release create android-latest BodyBase-Sync.apk \
+            --prerelease --target "${{ github.sha }}" \
+            --title "BodyBase Sync für Android (1.0.${{ github.run_number }})" \
+            --notes "Android-App, die Health Connect an dein BodyBase schickt. Auf dem Handy herunterladen und installieren. Feste Adresse: https://github.com/${{ github.repository }}/releases/download/android-latest/BodyBase-Sync.apk"
+      - name: Fehlerprotokoll ablegen
+        if: failure()
+        run: |
+          { grep -E "^e: |error:|FAILED|What went wrong|Could not|> " android/build.log | head -150; echo; echo "----- Ende -----"; tail -60 android/build.log; } > log.txt || true
+          gh release delete android-build-log --cleanup-tag --yes || true
+          gh release create android-build-log --prerelease --target "${{ github.sha }}" --title "Android-Build fehlgeschlagen" --notes-file log.txt

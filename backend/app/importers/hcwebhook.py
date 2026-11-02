@@ -140,9 +140,11 @@ def ingest(w: Writer, payload: dict) -> dict:
         raw = str(item.get("type") or "")
         raw = EXERCISE_CODES.get(raw, raw).lower().replace("exercise_type_", "")
         w.activity(ActivityIn(
-            source_id=f"hc-{start.isoformat()}", start=start, sport_raw=raw, name=raw.replace("_", " ").title() or None,
+            source_id=f"hc-{start.isoformat()}", start=start, sport_raw=raw,
+            name=(str(item.get("title") or "").strip() or raw.replace("_", " ").title() or None),
             duration_s=_num(item.get("duration_seconds")) or ((end - start).total_seconds() if end else None),
-            distance_m=_num(item.get("distance_meters")),
+            distance_m=_num(item.get("distance_meters")), calories=_num(item.get("calories")),
+            avg_hr=_num(item.get("avg_heart_rate")), max_hr=_num(item.get("max_heart_rate")),
         ))
         rec()
     return counts

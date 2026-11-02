@@ -29,16 +29,18 @@ class HealthConnect(Provider):
     initials = "HC"
     website = "https://health.google/health-connect-android/"
     delivers = ["activity", "sleep", "heart", "body", "nutrition"]
-    summary = "Google Fit, Samsung Health, Fitbit, Xiaomi, Zepp, Oura & Co. landen auf dem Handy in Health Connect. Die App „HC Webhook“ schickt alles automatisch an BodyBase."
+    summary = ("Google Fit, Samsung Health, Fitbit, Xiaomi, Zepp, Oura & Co. landen auf dem Handy in Health Connect. "
+               "Die App „BodyBase Sync“ schickt alles automatisch hierher.")
     setup = [
-        "Auf dem Android-Handy die App „HC Webhook“ installieren (Google Play oder github.com/mcnaveen/health-connect-webhook).",
-        "In der App den Zugriff auf Health Connect erlauben und unter „Data Types“ auswählen, was übertragen werden soll.",
-        "Unter „Webhooks“ einen neuen Webhook anlegen: Adresse unten einfügen, Format JSON.",
-        "Bei „Headers“ den Namen „X-API-Key“ und als Wert den Schlüssel unten eintragen. Mit „Test“ prüfen.",
-        "Unter „Sync“ ein Intervall wählen (z. B. alle 30 Minuten). Fertig: Neue Werte kommen von selbst.",
+        "BodyBase auf dem Android-Handy öffnen, hier „App herunterladen“ antippen und die APK installieren "
+        "(Android fragt einmal, ob der Browser Apps installieren darf).",
+        "Zurück in BodyBase „Mit App verbinden“ antippen: Adresse und Schlüssel landen von selbst in der App.",
+        "In der App „Zugriff erlauben“ antippen und alles freigeben, auch „Im Hintergrund lesen“.",
+        "Fertig: Die App gleicht alle 30 Minuten ab, die ersten 30 Tage kommen sofort.",
     ]
     note = ("Google schaltet die alte Google-Fit-Schnittstelle Ende 2026 ab. Health Connect ist der Nachfolger und läuft nur auf dem Handy, "
-            "deshalb braucht es die kleine Weiterleitungs-App. Tipp: In HC Webhook den Puls auf „1 Minute“ stellen, das spart Datenvolumen.")
+            "deshalb braucht es die kleine App. Alternativ geht auch „HC Webhook“ aus dem Play Store mit Adresse und Schlüssel unten "
+            "(Header „X-API-Key“).")
 
 
 class Api(Provider):

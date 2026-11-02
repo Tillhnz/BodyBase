@@ -53,3 +53,20 @@ def test_ingest_connection_check(client, auth):
     assert client.head("/api/ingest/json", headers={"Authorization": f"Bearer {token}"}).status_code == 200
     assert client.get("/api/ingest/health-connect", headers={"X-API-Key": "falsch"}).status_code == 401
     assert client.get("/api/ingest/gibtsnicht", headers={"X-API-Key": token}).status_code == 404
+
+
+def test_bodybase_sync_app_format(client, auth):
+    """So schickt die Android-App „BodyBase Sync“: je Datenart ein Paket, Zeiten in UTC, Training mit Titel und Puls."""
+    from app.timeutil import today
+    token = client.get("/api/me/ingest", headers=auth).json()["token"]
+    d = (today() - timedelta(days=2)).isoformat()
+    head = {"timestamp": f"{d}T20:00:00Z", "app_version": "1.0.7", "app": "BodyBase Sync", "timezone": "Europe/Berlin"}
+    ex = {**head, "exercise": [{"start_time": f"{d}T16:00:00Z", "end_time": f"{d}T17:00:00Z", "type": "strength_training",
+                                "duration_seconds": 3600, "title": "Oberkörper", "calories": 410.5, "avg_heart_rate": 118.0,
+                                "max_heart_rate": 161.0}]}
+    r = client.post("/api/ingest/health-connect", json=ex, headers={"X-API-Key": token})
+    assert r.status_code == 200 and r.json()["records"] == 1
+    hr = {**head, "heart_rate": [{"time": f"{d}T16:{m:02d}:00Z", "avg": 110.5 + m, "min": 100, "max": 130} for m in range(5)]}
+    assert client.post("/api/ingest/health-connect", json=hr, headers={"X-API-Key": token}).status_code == 200
+    act = next(a for a in client.get("/api/activities", headers=auth).json()["items"] if a["name"] == "Oberkörper")
+    assert act["sport"] == "strength" and round(act["calories"]) == 410

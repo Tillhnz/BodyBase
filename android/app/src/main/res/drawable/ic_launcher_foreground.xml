@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drei Ringe wie im BodyBase-Logo: Aktivität, Herz, Schlaf -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:strokeColor="#263246" android:strokeWidth="5.5"
+        android:pathData="M54,27.6 a26.4,26.4 0 1,1 0,52.8 a26.4,26.4 0 1,1 0,-52.8" />
+    <path android:strokeColor="#263246" android:strokeWidth="5.5"
+        android:pathData="M54,36.4 a17.6,17.6 0 1,1 0,35.2 a17.6,17.6 0 1,1 0,-35.2" />
+    <path android:strokeColor="#263246" android:strokeWidth="5.5"
+        android:pathData="M54,45.2 a8.8,8.8 0 1,1 0,17.6 a8.8,8.8 0 1,1 0,-17.6" />
+    <path android:strokeColor="#F5A524" android:strokeWidth="5.5" android:strokeLineCap="round"
+        android:pathData="M54,27.6 A26.4,26.4 0 1,1 31.137,67.2" />
+    <path android:strokeColor="#FF6B81" android:strokeWidth="5.5" android:strokeLineCap="round"
+        android:pathData="M54,36.4 A17.6,17.6 0 1,1 38.758,62.8" />
+    <path android:strokeColor="#8B7CFF" android:strokeWidth="5.5" android:strokeLineCap="round"
+        android:pathData="M54,45.2 A8.8,8.8 0 1,1 46.379,58.4" />
+    <path android:fillColor="#9AA8FF"
+        android:pathData="M54,50.48 a3.52,3.52 0 1,1 0,7.04 a3.52,3.52 0 1,1 0,-7.04" />
+</vector>

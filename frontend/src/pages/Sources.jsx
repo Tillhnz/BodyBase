@@ -254,6 +254,8 @@ function KeyConnect({ p, c, onChange }) {
   );
 }
 
+const APK_URL = "https://github.com/Tillhnz/BodyBase/releases/download/android-latest/BodyBase-Sync.apk";
+
 function PushSetup({ p }) {
   const [{ data }, setData] = useAsync(() => api.get("/me/ingest"), []);
   if (!data) return null;
@@ -274,12 +276,26 @@ function PushSetup({ p }) {
   return (
     <div className="stack">
       <Steps items={p.setup} />
+      {hc && (
+        <div className="app-card">
+          <img src="/icon.svg" alt="" width="44" height="44" />
+          <div className="app-card-main">
+            <strong>BodyBase Sync für Android</strong>
+            <span className="hint">Liest Health Connect und schickt alles automatisch hierher.</span>
+            <div className="actions">
+              <a className="btn" href={APK_URL}>App herunterladen</a>
+              <a className="btn primary" href={`bodybase://setup?url=${encodeURIComponent(url)}&key=${encodeURIComponent(data.token)}`}>Mit App verbinden</a>
+            </div>
+            <span className="hint">„Mit App verbinden“ funktioniert auf dem Handy, sobald die App installiert ist.</span>
+          </div>
+        </div>
+      )}
       <label>Adresse<CopyField value={url} /></label>
       <label>Schlüssel {hae && <span className="hint">(in Health Auto Export als Header „Authorization“ mit „Bearer “ davor)</span>}
-        {hc && <span className="hint">(in HC Webhook unter „Headers“: Name <code>X-API-Key</code>, Wert dieser Schlüssel)</span>}
+        {hc && <span className="hint">(von Hand eintragen oder in HC Webhook als Header <code>X-API-Key</code>)</span>}
         <CopyField value={data.token} />
       </label>
-      {hc && <p className="hint">Ob die Übertragung klappt, zeigt HC Webhook im Webhook-Protokoll. Hier bei der Quelle siehst du, wann zuletzt Daten ankamen.</p>}
+      {hc && <p className="hint">Wann zuletzt Daten ankamen, siehst du hier bei der Quelle und in der App.</p>}
       {!hae && !hc && <div><div className="field-label small muted">Beispiel</div><pre className="code">{example}</pre>
         <p className="hint">Messgrößen: weight, body_fat, resting_hr, hrv, steps, sleep_duration, glucose … (Liste unter Trends). Außerdem „activities“ und „sleep“.</p></div>}
       <div><button className="link small" onClick={rotate}>Neuen Schlüssel erzeugen</button></div>

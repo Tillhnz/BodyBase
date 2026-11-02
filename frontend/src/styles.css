@@ -857,3 +857,10 @@ details > summary { list-style-position: inside; }
   background: var(--panel-2); border: 1px solid var(--line-2); box-shadow: var(--shadow); font-size: 0.82rem; pointer-events: none; white-space: nowrap; }
 .body3d-hint { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; pointer-events: none; }
 @media (max-width: 800px) { .seg-3d { grid-template-columns: 1fr; } }
+
+/* App-Hinweis bei Android Health Connect */
+.app-card { display: flex; gap: 0.9rem; align-items: flex-start; padding: 1rem; border: 1px solid var(--line); border-radius: 14px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--iris) 10%, transparent), transparent 70%); }
+.app-card img { border-radius: 11px; flex: none; }
+.app-card-main { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+.app-card-main .actions { margin-top: 0.4rem; flex-wrap: wrap; }

@@ -25,7 +25,7 @@ Der Kern, an dem alle deine Fitness- und Gesundheitsdaten zusammenkommen: Uhr, R
 | Garmin Connect | Anmeldung (E-Mail/Passwort) | Schritte, Schlaf, HRV, Ruhepuls, Body Battery, Stress, SpO₂, VO₂max, Index-Waage, Aktivitäten |
 | Strava | OAuth | Aktivitäten mit Strecke, Puls, Leistung, Karte |
 | Apple Health | Push (Health Auto Export) oder Export-Datei | Alles aus iPhone und Apple Watch |
-| Android Health Connect | Push (Weiterleitungs-App) | Samsung Health, Google Fit, Xiaomi, Zepp … |
+| Android Health Connect | Push (App „BodyBase Sync“) | Samsung Health, Google Fit, Xiaomi, Zepp … |
 | Withings | OAuth | Waage, Körperzusammensetzung, Blutdruck, Schlaf, Schritte |
 | Fitbit / Google Pixel Watch | OAuth | Schritte, Ruhepuls, HRV, Schlafphasen, SpO₂, VO₂max, Gewicht, Trainings |
 | Polar | OAuth (AccessLink) | Trainings, Schlaf, Nightly Recharge, Aktivität |
@@ -46,6 +46,15 @@ Der Kern, an dem alle deine Fitness- und Gesundheitsdaten zusammenkommen: Uhr, R
 | Eigene Eingaben | von Hand | Gewicht, Blutdruck, Umfänge … |
 
 Für die OAuth-Anbieter legt der Administrator einmal eine (kostenlose) Entwickler-App beim Anbieter an. BodyBase zeigt unter **Administration → Anbieter** für jeden Anbieter die Schritte und die genaue Rückruf-Adresse an. Dafür braucht BodyBase eine öffentliche HTTPS-Adresse (siehe unten). Garmin, intervals.icu, Hevy, Nightscout, Home Assistant und alle Uploads funktionieren auch ohne.
+
+## Android-App „BodyBase Sync“
+
+Liegt unter `android/` (Kotlin, Jetpack Compose) und liest Health Connect: Schritte, Strecke, Kalorien, Trainings, Puls (als Minutenmittel), Ruhepuls, HRV, Schlaf mit Phasen, Gewicht, Körperfett, Magermasse, Knochenmasse, VO2max, SpO₂, Atemfrequenz, Temperatur, Blutdruck, Blutzucker, Ernährung und Trinken. Alles geht an `POST /api/ingest/health-connect`.
+
+- **Herunterladen:** <https://github.com/Tillhnz/BodyBase/releases/download/android-latest/BodyBase-Sync.apk>. Jeder Push auf `android/` baut eine neue Version, die sich über die alte installieren lässt.
+- **Einrichten:** In BodyBase unter Quellen → Android Health Connect auf „Mit App verbinden“ tippen. Die App fragt nach, bevor sie eine Adresse übernimmt.
+- **Abgleich:** alle 15 Minuten bis 3 Stunden über WorkManager. Je Datenart wird der Stand gemerkt und mit Überlappung neu gelesen (Puls 6 Stunden, sonst 2 Tage), weil Uhren oft verspätet nachliefern. Der Server ersetzt doppelte Werte.
+- **Signatur:** Die APK wird mit `android/bodybase-sync.jks` signiert. Mit den Secrets `BB_KEYSTORE*` lässt sich ein eigener Schlüssel nutzen; Updates klappen nur, solange der Schlüssel gleich bleibt.
 
 ## Installation auf Proxmox
 
