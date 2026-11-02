@@ -30,6 +30,11 @@ jobs:
         run: |
           set -o pipefail
           python -m pytest -q -x --tb=short 2>&1 | tee -a ci.log
+      - name: Altes Fehlerprotokoll entfernen
+        if: success() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete ci-log --cleanup-tag --yes || true
       - name: Fehlerprotokoll ablegen
         # Protokolle sind nicht überall lesbar: bei Fehlern zusätzlich als (Vorab-)Release „ci-log“
         if: failure() && github.event_name == 'push'
