@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -20,9 +23,22 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
       - name: Statische Prüfung
-        run: ruff check --select F,E9 app ../updater
+        run: |
+          set -o pipefail
+          ruff check --select F,E9 app ../updater 2>&1 | tee -a ci.log
       - name: Tests
-        run: python -m pytest -q
+        run: |
+          set -o pipefail
+          python -m pytest -q -x --tb=short 2>&1 | tee -a ci.log
+      - name: Fehlerprotokoll ablegen
+        # Protokolle sind nicht überall lesbar: bei Fehlern zusätzlich als (Vorab-)Release „ci-log“
+        if: failure() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tail -c 100000 ci.log > notes.txt || echo "kein Protokoll" > notes.txt
+          gh release delete ci-log --cleanup-tag --yes || true
+          gh release create ci-log --prerelease --target "${{ github.sha }}" --title "CI fehlgeschlagen (Backend)" --notes-file notes.txt
 
   frontend:
     runs-on: ubuntu-latest
