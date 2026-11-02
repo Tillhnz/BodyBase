@@ -34,4 +34,4 @@ def all_providers() -> list[Provider]:
 
 def name_of(key: str) -> str:
     p = PROVIDERS.get(key)
-    return p.name if p else key
+    return p.name if p else ("BodyBase" if key == "bodybase" else key)

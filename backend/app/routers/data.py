@@ -22,7 +22,7 @@ from .account import DEFAULT_GOALS
 
 router = APIRouter(prefix="/api", tags=["data"])
 
-HOME_DEFAULT = ["weight", "resting_hr", "hrv", "sleep_duration", "readiness", "vo2max"]
+HOME_DEFAULT = ["weight", "resting_hr", "hrv", "sleep_duration", "steps", "vo2max"]
 
 
 def _range(days: int | None, start: str | None, end: str | None) -> tuple[date, date]:
@@ -97,6 +97,8 @@ def metric_detail(key: str, days: int | None = Query(None, ge=1, le=7300), start
 @router.get("/summary")
 def summary(keys: str = "", days: int = Query(30, ge=7, le=365), user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Jüngster Wert, Vergleich zum Schnitt und kleiner Verlauf für mehrere Messgrößen."""
+    # „readiness“ (Wert eines Anbieters) wird auf der Startseite durch die eigene Bereitschaft ersetzt
+    keys = ",".join("bb_readiness" if k == "readiness" else k for k in keys.split(","))
     wanted = [k for k in keys.split(",") if k in M.METRICS] or HOME_DEFAULT
     e = today()
     s = e - timedelta(days=days - 1)
@@ -151,14 +153,12 @@ def dashboard(user: User = Depends(current_user), db: Session = Depends(get_db))
     yesterday = t - timedelta(days=1)
     return {
         "today": t.isoformat(),
-        "rings": [
+        "goals": [
             {"key": "steps", "label": "Schritte", "value": day_value("steps", t), "yesterday": day_value("steps", yesterday), "goal": goals.get("steps")},
             {"key": "active_minutes", "label": "Aktive Minuten", "value": day_value("active_minutes", t),
              "yesterday": day_value("active_minutes", yesterday), "goal": goals.get("active_minutes")},
-            {"key": "sleep_duration", "label": "Schlaf", "value": last_sleep["asleep_min"] if last_sleep else None,
-             "goal": goals.get("sleep_duration")},
         ],
-        "readiness": _readiness(db, user, t),
+        "scores": _scores(db, user),
         "week": {"days": days, "totals": totals(this_week), "prev": totals(prev_week)},
         "recent": [activity_out(a) for a in acts[:6]],
         "sleep": last_sleep,
@@ -171,35 +171,28 @@ def dashboard(user: User = Depends(current_user), db: Session = Depends(get_db))
     }
 
 
-def _readiness(db: Session, user: User, t: date) -> dict | None:
-    """Bereitschaft: Wert eines Anbieters (Oura, WHOOP, Garmin) oder eigene Schätzung aus HRV und Ruhepuls."""
-    for key in ("readiness", "recovery", "body_battery"):
-        s = daily_series(db, user, key, t - timedelta(days=1), t)
-        if s:
-            return {"value": s[-1]["value"], "source": s[-1]["source"], "key": key, "day": s[-1]["day"], "estimated": False}
-    hrv = daily_series(db, user, "hrv", t - timedelta(days=60), t)
-    rhr = daily_series(db, user, "resting_hr", t - timedelta(days=60), t)
-    if len(hrv) < 7 and len(rhr) < 7:
-        return None
-    score, parts = 50.0, []
-    if len(hrv) >= 7 and hrv[-1]["day"] >= (t - timedelta(days=1)).isoformat():
-        base = [p["value"] for p in hrv[:-1]]
-        mean = sum(base) / len(base)
-        sd = math.sqrt(sum((v - mean) ** 2 for v in base) / len(base)) or 1
-        z = (hrv[-1]["value"] - mean) / sd
-        score += max(-25, min(25, z * 12))
-        parts.append("HRV")
-    if len(rhr) >= 7 and rhr[-1]["day"] >= (t - timedelta(days=1)).isoformat():
-        base = [p["value"] for p in rhr[:-1]]
-        mean = sum(base) / len(base)
-        sd = math.sqrt(sum((v - mean) ** 2 for v in base) / len(base)) or 1
-        z = (rhr[-1]["value"] - mean) / sd
-        score -= max(-25, min(25, z * 12))
-        parts.append("Ruhepuls")
-    if not parts:
-        return None
-    return {"value": round(max(0, min(100, score))), "source": "bodybase", "key": "readiness", "day": t.isoformat(),
-            "estimated": True, "basis": parts}
+_scores_written: dict[int, float] = {}
+
+
+def _scores(db: Session, user: User) -> dict:
+    """Eigene Bereitschaft, Auslastung und Schlafwert; schreibt sie höchstens alle 10 Minuten als Messgrößen."""
+    import time
+
+    from .. import scores
+    if time.time() - _scores_written.get(user.id, 0) > 600:
+        _scores_written[user.id] = time.time()
+        try:
+            scores.refresh(db, user)
+        except Exception:
+            db.rollback()
+    return scores.today_scores(db, user)
+
+
+@router.get("/scores")
+def get_scores(days: int = Query(14, ge=1, le=120), user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Bereitschaft, Auslastung und Schlaf (0–100) mit Aufschlüsselung und Verlauf."""
+    from .. import scores
+    return scores.today_scores(db, user, days)
 
 
 # ---------- Aktivitäten ----------
@@ -253,9 +246,11 @@ def list_activities(sport: str | None = None, q: str | None = None, days: int | 
 def activity_stats(days: int = Query(365, ge=7, le=3650), user: User = Depends(current_user), db: Session = Depends(get_db)):
     e = today()
     s = e - timedelta(days=days - 1)
-    rows = db.execute(select(Activity.day, Activity.sport, Activity.duration_s, Activity.moving_s, Activity.distance_m,
-                             Activity.calories, Activity.load).where(
+    from .. import scores
+    acts = db.scalars(select(Activity).where(
         Activity.user_id == user.id, Activity.duplicate_of.is_(None), Activity.day >= s, Activity.day <= e)).all()
+    ctx = scores.Context(db, user, e - timedelta(days=30), e)
+    rows = [(a.day, a.sport, a.duration_s, a.moving_s, a.distance_m, a.calories, ctx.activity_load(a)) for a in acts]
     by_day: dict = defaultdict(float)
     by_sport: dict = defaultdict(lambda: {"count": 0, "minutes": 0.0, "distance_km": 0.0, "calories": 0.0})
     by_week: dict = defaultdict(lambda: defaultdict(float))
@@ -270,7 +265,7 @@ def activity_stats(days: int = Query(365, ge=7, le=3650), user: User = Depends(c
         b["calories"] += cal or 0
         wk = (day - timedelta(days=day.weekday())).isoformat()
         by_week[wk][sport] += mins
-        load_day[day] += load if load is not None else mins  # ohne Belastungswert zählen Minuten
+        load_day[day] += load  # Trainingslast (TRIMP) wie bei der Auslastung
     # Fitness (CTL, 42 Tage) und Ermüdung (ATL, 7 Tage) als exponentiell gleitende Mittel der Tagesbelastung
     ctl = atl = 0.0
     form = []

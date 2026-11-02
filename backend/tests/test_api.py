@@ -71,8 +71,15 @@ def test_demo_data_dashboard_and_views(client):
     assert r.status_code == 201, r.text
     dash = client.get("/api/dashboard", headers=headers).json()
     assert dash["has_data"] and dash["demo"]
-    assert dash["rings"][0]["key"] == "steps"
-    assert dash["readiness"] is not None
+    assert dash["goals"][0]["key"] == "steps"
+    sc = dash["scores"]
+    assert sc["readiness"] and 0 <= sc["readiness"]["value"] <= 100 and sc["readiness"]["parts"]
+    assert sc["sleep"] is None or 0 <= sc["sleep"]["value"] <= 100
+    assert len(sc["history"]) == 14 and any(h["load"] for h in sc["history"])
+    assert any(h["readiness"] is not None for h in sc["history"])
+    # eigene Werte stehen auch als Messgrößen bereit (Trends)
+    assert client.get("/api/metrics/bb_readiness?days=30", headers=headers).json()["series"]
+    assert client.get("/api/scores?days=7", headers=headers).status_code == 200
     summary = client.get("/api/summary?keys=weight,resting_hr,hrv", headers=headers).json()
     assert all(s["last"] for s in summary)
     # Schritte von Garmin und Apple Health: Garmin hat laut Rangfolge Vorrang

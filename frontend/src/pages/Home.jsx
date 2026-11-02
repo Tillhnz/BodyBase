@@ -4,7 +4,7 @@ import Coach from "../components/Coach.jsx";
 import HabitsToday from "../habits/HabitsToday.jsx";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
-import { KernRings, StageBar } from "../components/charts.jsx";
+import ScoreCards from "../components/Scores.jsx";
 import { Loading, confirmDialog, toast } from "../components/feedback.jsx";
 import { EmptyState, MetricCard, Segmented, SportIcon, useAsync } from "../components/ui.jsx";
 import { fmtDuration, fmtKm, fmtLongDay, fmtMinutes, fmtNum, fmtTime, weekdayShort } from "../fmt.js";
@@ -15,15 +15,6 @@ function greeting() {
   if (h < 11) return "Guten Morgen";
   if (h < 18) return "Hallo";
   return "Guten Abend";
-}
-
-const READINESS_LABEL = { readiness: "Bereitschaft", recovery: "Erholung", body_battery: "Body Battery" };
-
-function readinessText(v) {
-  if (v >= 80) return "Gut erholt. Ein guter Tag für eine fordernde Einheit.";
-  if (v >= 60) return "Normal erholt. Training wie geplant.";
-  if (v >= 40) return "Etwas angeschlagen. Lieber locker oder kurz.";
-  return "Wenig erholt. Ruhe und Schlaf bringen heute am meisten.";
 }
 
 export default function Home({ user }) {
@@ -82,9 +73,6 @@ export default function Home({ user }) {
     );
   }
 
-  const [steps, active, sleep] = data.rings;
-  const progress = (r) => (r.value != null && r.goal ? r.value / r.goal : 0);
-  const rd = data.readiness;
   const week = data.week;
   const maxMin = Math.max(30, ...week.days.map((d) => d.minutes));
   const todayIso = data.today;
@@ -105,64 +93,7 @@ export default function Home({ user }) {
         </div>
       ))}
 
-      <div className="home-hero">
-        <section className="kern" aria-label="Heute">
-          <KernRings rings={[
-            { key: "steps", label: "Schritte", progress: progress(steps), color: "var(--c-activity)" },
-            { key: "active", label: "Aktive Minuten", progress: progress(active), color: "var(--c-heart)" },
-            { key: "sleep", label: "Schlaf", progress: progress(sleep), color: "var(--c-sleep)" },
-          ]}>
-            <div>
-              <strong>{steps.value != null && steps.goal ? `${Math.round(progress(steps) * 100)}%` : "–"}</strong>
-              <span>des Schrittziels</span>
-            </div>
-          </KernRings>
-          <ul className="kern-legend">
-            <li className="cat-activity"><i /><div><div className="lbl">Schritte heute</div>
-              <div className="val">{fmtNum(steps.value)}<small>von {fmtNum(steps.goal)}</small></div></div></li>
-            <li className="cat-heart"><i /><div><div className="lbl">Aktive Minuten</div>
-              <div className="val">{fmtNum(active.value)}<small>von {fmtNum(active.goal)}</small></div></div></li>
-            <li className="cat-sleep"><i /><div><div className="lbl">Schlaf letzte Nacht</div>
-              <div className="val">{fmtMinutes(sleep.value)}<small>von {fmtMinutes(sleep.goal)}</small></div></div></li>
-          </ul>
-        </section>
-
-        <div className="stack">
-          <section className="panel readiness" style={{ marginBottom: 0 }}>
-            <div className="panel-head">
-              <h2>{rd ? READINESS_LABEL[rd.key] || "Bereitschaft" : "Bereitschaft"}</h2>
-              {rd && <span className="pill">{rd.estimated ? `geschätzt aus ${rd.basis.join(" und ")}` : `laut ${providerName(rd.source)}`}</span>}
-            </div>
-            {rd ? (
-              <>
-                <div className="readiness-top">
-                  <div className="readiness-num">{fmtNum(rd.value)}</div>
-                  <p className="muted" style={{ margin: 0 }}>{readinessText(rd.value)}</p>
-                </div>
-                <div className="readiness-bar" aria-hidden="true"><i style={{ left: `${Math.max(0, Math.min(100, rd.value))}%` }} /></div>
-              </>
-            ) : <p className="muted">Sobald HRV und Ruhepuls von ein paar Tagen vorliegen, schätzt BodyBase hier deine Erholung.</p>}
-          </section>
-          <section className="panel" style={{ marginBottom: 0 }}>
-            <div className="panel-head"><h2>Letzte Nacht</h2><Link className="link small" to="/sleep">Schlaf</Link></div>
-            {data.sleep ? (
-              <>
-                <p style={{ marginBottom: "0.6rem" }}>
-                  <strong style={{ fontFamily: "var(--font-display)", fontSize: "1.9rem" }}>{fmtMinutes(data.sleep.asleep_min)}</strong>
-                  <span className="muted small"> · {fmtTime(data.sleep.start)} bis {fmtTime(data.sleep.end)}</span>
-                  {data.sleep.score != null && <span className="pill" style={{ marginLeft: "0.6rem" }}>Wert {fmtNum(data.sleep.score)}</span>}
-                </p>
-                <StageBar deep={data.sleep.deep_min} rem={data.sleep.rem_min} light={data.sleep.light_min} awake={data.sleep.awake_min} />
-                <div className="stage-legend">
-                  {data.sleep.deep_min != null && <span><i className="st-deep" />Tief {fmtMinutes(data.sleep.deep_min)}</span>}
-                  {data.sleep.rem_min != null && <span><i className="st-rem" />REM {fmtMinutes(data.sleep.rem_min)}</span>}
-                  {data.sleep.light_min != null && <span><i className="st-light" />Leicht {fmtMinutes(data.sleep.light_min)}</span>}
-                </div>
-              </>
-            ) : <p className="muted">Keine Schlafdaten der letzten Nacht.</p>}
-          </section>
-        </div>
-      </div>
+      <ScoreCards scores={data.scores} sleep={data.sleep} goals={data.goals} />
 
       <div className="grid-2 home-habits">
         <HabitsToday onChanged={() => setTick((n) => n + 1)} />
@@ -221,10 +152,6 @@ export default function Home({ user }) {
     </>
   );
 }
-
-const PROVIDER_NAMES = { bodybase: "BodyBase", oura: "Oura", whoop: "WHOOP", garmin: "Garmin", polar: "Polar", intervals: "intervals.icu",
-  fitbit: "Fitbit", apple_health: "Apple Health", manual: "Eingabe" };
-const providerName = (key) => PROVIDER_NAMES[key] || key;
 
 function relWhen(iso) {
   const d = new Date(iso);

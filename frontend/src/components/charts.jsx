@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { fmtDay, fmtDayShort, fmtNum, parseDay } from "../fmt.js";
 
-/* Eigene SVG-Diagramme ohne Bibliothek: Linie mit Fläche, Balken, Sparkline, Ringe, Kalender, Belastung, Strecke.
+/* Eigene SVG-Diagramme ohne Bibliothek: Linie mit Fläche, Balken, Sparkline, Kalender, Belastung, Strecke.
    Farben kommen aus der CSS-Variable --c (Kategorie) des umgebenden Elements. */
 
 export function useWidth(initial = 640) {
@@ -227,38 +227,6 @@ export function Sparkline({ data, height = 42 }) {
       <path d={`${d}L100,40L0,40Z`} className="chart-area" />
       <path d={d} className="chart-line" style={{ vectorEffect: "non-scaling-stroke" }} />
     </svg>
-  );
-}
-
-/** Der Tageskern: konzentrische Ringe, je Ring Anteil am Ziel (über 100 % läuft eine zweite Runde blasser weiter). */
-export function KernRings({ rings, children, size = 240 }) {
-  const [shown, setShown] = useState(false);
-  useEffect(() => { const id = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(id); }, []);
-  const c = size / 2;
-  const stroke = size * 0.075;
-  const gap = stroke * 0.42;
-  return (
-    <div className="kern-rings">
-      <svg viewBox={`0 0 ${size} ${size}`} role="img" aria-label={rings.map((r) => `${r.label}: ${Math.round((r.progress || 0) * 100)} %`).join(", ")}>
-        {rings.map((r, i) => {
-          const rad = c - stroke / 2 - i * (stroke + gap);
-          const circ = 2 * Math.PI * rad;
-          const p = Math.max(0, r.progress || 0);
-          const first = Math.min(1, p);
-          const over = Math.min(1, Math.max(0, p - 1));
-          return (
-            <g key={r.key} transform={`rotate(-90 ${c} ${c})`}>
-              <circle className="ring-track" cx={c} cy={c} r={rad} strokeWidth={stroke} />
-              <circle className="ring-fill" cx={c} cy={c} r={rad} strokeWidth={stroke} stroke={r.color}
-                strokeDasharray={circ} strokeDashoffset={shown ? circ * (1 - first) : circ} style={{ transitionDelay: `${i * 140}ms` }} />
-              {over > 0 && <circle className="ring-over" cx={c} cy={c} r={rad} strokeWidth={stroke * 0.45} stroke="var(--chalk)"
-                strokeDasharray={circ} strokeDashoffset={shown ? circ * (1 - over) : circ} />}
-            </g>
-          );
-        })}
-      </svg>
-      <div className="kern-center">{children}</div>
-    </div>
   );
 }
 

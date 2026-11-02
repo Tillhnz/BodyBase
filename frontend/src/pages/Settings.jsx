@@ -10,7 +10,7 @@ import { getTheme, setTheme } from "../theme.js";
 import { useProviders } from "./Sources.jsx";
 
 const num = (s) => (s === "" || s == null ? null : Number(String(s).replace(",", ".")));
-const DEFAULT_HOME = ["weight", "resting_hr", "hrv", "sleep_duration", "readiness", "vo2max"];
+const DEFAULT_HOME = ["weight", "resting_hr", "hrv", "sleep_duration", "steps", "vo2max"];
 
 function Profile({ user, onChange }) {
   const [f, setF] = useState({ name: user.name || "", height_cm: user.height_cm ?? "", birth_year: user.birth_year ?? "", sex: user.sex || "" });

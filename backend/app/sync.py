@@ -168,6 +168,13 @@ def _loop() -> None:
                     heartrate.maintenance(db)
             except Exception:
                 log.exception("Puls-Wartung fehlgeschlagen")
+            try:
+                from . import scores
+                with SessionLocal() as db:
+                    for u in db.scalars(select(User)).all():
+                        scores.refresh(db, u, days=7)
+            except Exception:
+                log.exception("Tageswerte (Bereitschaft, Auslastung, Schlaf) fehlgeschlagen")
         time.sleep(60)
 
 

@@ -68,7 +68,10 @@ METRICS: dict[str, Metric] = {m.key: m for m in [
     Metric("sleep_score", "Schlafwert", "", "sleep", "avg", 0, "up", 0, 100),
     Metric("sleep_efficiency", "Schlafeffizienz", "%", "sleep", "avg", 0, "up", 0, 100),
     # Erholung
-    Metric("readiness", "Bereitschaft", "", "recovery", "avg", 0, "up", 0, 100),
+    Metric("bb_readiness", "Bereitschaft", "", "recovery", "avg", 0, "up", 0, 100),
+    Metric("bb_load", "Auslastung", "", "activity", "avg", 0, None, 0, 100),
+    Metric("bb_sleep", "Schlafwert (BodyBase)", "", "sleep", "avg", 0, "up", 0, 100),
+    Metric("readiness", "Bereitschaft (Anbieter)", "", "recovery", "avg", 0, "up", 0, 100),
     Metric("recovery", "Erholung (WHOOP)", "%", "recovery", "avg", 0, "up", 0, 100),
     Metric("body_battery", "Body Battery", "", "recovery", "max", 0, "up", 0, 100),
     Metric("stress", "Stress", "", "recovery", "avg", 0, "down", 0, 100),
