@@ -218,7 +218,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--iris); outline: 
 .score-title { font-size: 0.78rem; letter-spacing: 0.09em; text-transform: uppercase; font-weight: 600; color: var(--mute); text-decoration: none; }
 .score-title:hover { color: var(--c); }
 .score-head .pill { color: var(--c); border-color: color-mix(in srgb, var(--c) 45%, transparent); }
-.score-main { display: flex; align-items: flex-end; gap: 1rem; }
+.score-main { display: flex; align-items: flex-end; gap: 1rem; width: 100%; padding: 0; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer; }
+.score-more { display: flex; flex-direction: column; gap: 0.75rem; animation: score-in 0.22s ease-out; }
+@keyframes score-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.score-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-top: auto; padding: 0.55rem 0 0;
+  border: 0; border-top: 1px solid var(--line); background: none; color: var(--mute); font: inherit; font-size: 0.76rem;
+  text-align: left; cursor: pointer; }
+.score-foot:hover { color: var(--chalk); }
+.score-chev { flex: none; display: inline-flex; align-items: center; gap: 0.3rem; color: var(--c); font-weight: 600; }
+.score-chev::after { content: ""; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg); transition: transform 0.2s; }
+.score-card.open .score-chev::after { transform: translateY(1px) rotate(-135deg); }
 .score-num { font-family: var(--font-display); font-size: clamp(3.4rem, 5vw, 4.4rem); font-weight: 700; line-height: 0.85; color: var(--c); font-variant-numeric: tabular-nums; min-width: 2ch; }
 .score-hist { flex: 1; display: flex; align-items: flex-end; gap: 3px; height: 46px; }
 .score-hist span { flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { fmtMinutes, fmtNum, fmtTime } from "../fmt.js";
 import { StageBar } from "./charts.jsx";
@@ -55,26 +56,59 @@ function Parts({ parts }) {
   );
 }
 
-function Card({ cat, title, metric, value, level, text, children, history, hk, today, sub }) {
+function Card({ cat, title, metric, value, level, text, children, history, hk, today, sub, stamp, open, onToggle }) {
   return (
-    <section className={`panel score-card cat-${cat}`}>
+    <section className={`panel score-card cat-${cat}${open ? " open" : ""}`}>
       <div className="score-head">
         <Link to={`/metric/${metric}`} className="score-title">{title}</Link>
         {level && <span className="pill">{level}</span>}
       </div>
-      <div className="score-main">
+      <button type="button" className="score-main" onClick={onToggle} aria-expanded={open}
+        title={open ? "Details einklappen" : "Details anzeigen"}>
         <div className="score-num">{value != null ? fmtNum(value) : "–"}</div>
         <History data={history} k={hk} today={today} />
-      </div>
-      {sub && <div className="score-sub">{sub}</div>}
-      <p className="score-text">{text}</p>
-      {children}
+      </button>
+      {open && (
+        <div className="score-more">
+          {sub && <div className="score-sub">{sub}</div>}
+          <p className="score-text">{text}</p>
+          {children}
+        </div>
+      )}
+      <button type="button" className="score-foot" onClick={onToggle} aria-expanded={open}>
+        <span>{stamp}</span>
+        <span className="score-chev" aria-hidden="true">{open ? "Weniger" : "Mehr"}</span>
+      </button>
     </section>
   );
 }
 
+const OPEN_KEY = "bodybase-scores-open";
+
+function readOpen() {
+  try { return localStorage.getItem(OPEN_KEY) === "1"; } catch { return false; }
+}
+
+/** „heute 20:58“, „gestern 07:18“ oder „Mo., 07:18“ */
+function when(iso, today) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("sv-SE");
+  const t = fmtTime(iso);
+  if (day === today) return `heute ${t}`;
+  const y = new Date(`${today}T12:00:00`); y.setDate(y.getDate() - 1);
+  if (day === y.toLocaleDateString("sv-SE")) return `gestern ${t}`;
+  return `${d.toLocaleDateString("de-DE", { weekday: "short" })} ${t}`;
+}
+
 export default function ScoreCards({ scores, sleep, goals = [] }) {
+  const [open, setOpen] = useState(readOpen);
   if (!scores) return null;
+  const toggle = () => setOpen((o) => {
+    try { localStorage.setItem(OPEN_KEY, o ? "0" : "1"); } catch { /* privat */ }
+    return !o;
+  });
+  const calc = `Berechnet ${when(scores.computed_at, scores.day)}`;
   const today = scores.day;
   const rd = scores.readiness;
   const ld = scores.load;
@@ -90,12 +124,14 @@ export default function ScoreCards({ scores, sleep, goals = [] }) {
     <>
       <div className="score-row">
         <Card cat="recovery" title="Bereitschaft" metric="bb_readiness" value={rd?.value} level={rd && rLevel + dayLabel(rd.day, today)}
-          text={rText} history={scores.history} hk="readiness" today={today}>
+          text={rText} history={scores.history} hk="readiness" today={today} open={open} onToggle={toggle}
+          stamp={rd ? `${calc} · Werte von ${rd.day === today ? "heute" : "gestern"}` : calc}>
           <Parts parts={rd?.parts} />
         </Card>
 
         <Card cat="activity" title="Auslastung" metric="bb_load" value={ld.value} level={lLevel} text={lText}
-          history={scores.history} hk="load" today={today}
+          history={scores.history} hk="load" today={today} open={open} onToggle={toggle}
+          stamp={ld.last_activity ? `${calc} · Training bis ${fmtTime(ld.last_activity)}` : calc}
           sub={(
             <div className="load-track" aria-label={`Zielbereich ${lo} bis ${hi}`}>
               <span className="zone" style={{ left: `${lo}%`, width: `${hi - lo}%` }} />
@@ -114,7 +150,8 @@ export default function ScoreCards({ scores, sleep, goals = [] }) {
         </Card>
 
         <Card cat="sleep" title="Schlaf" metric="bb_sleep" value={sl?.value} level={sl && sLevel + dayLabel(sl.day, today)}
-          text={sText} history={scores.history} hk="sleep" today={today}
+          text={sText} history={scores.history} hk="sleep" today={today} open={open} onToggle={toggle}
+          stamp={sl?.end ? `${calc} · Nacht bis ${when(sl.end, today)}` : calc}
           sub={sleep && (
             <div className="score-night">
               <strong>{fmtMinutes(sleep.asleep_min)}</strong>

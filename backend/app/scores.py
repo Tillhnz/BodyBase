@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from .models import Activity, Sample, SleepSession, User
 from .store import Writer, daily_series, day_ts, priority_for, rank
-from .timeutil import today, tz
+from .timeutil import today, tz, utcnow
 
 METRICS = ("bb_readiness", "bb_load", "bb_sleep")
 LOAD_K = 140.0
@@ -244,8 +244,16 @@ def today_scores(db: Session, user: User, days: int = 14) -> dict:
         r, s = ctx.readiness(d), ctx.sleep(d)
         history.append({"day": d.isoformat(), "readiness": r["value"] if r else None, "load": ctx.load(d)["value"],
                         "sleep": s["value"] if s else None})
+    todays = sorted(ctx.acts.get(t, []), key=lambda a: a.start)
+    last = todays[-1] if todays else None
+    if last:
+        load["last_activity"] = (last.start + timedelta(seconds=last.duration_s or last.moving_s or 0)).isoformat() + "Z"
+    if sl:
+        n = ctx.nights.get(date.fromisoformat(sl["day"]))
+        sl["end"] = n.end.isoformat() + "Z" if n else None
     return {
         "day": t.isoformat(),
+        "computed_at": utcnow().isoformat(timespec="seconds") + "Z",
         "readiness": rd,
         "load": {**load, "target": [lo, hi], "acwr": round(ratio, 2) if ratio else None,
                  "yesterday": ctx.load(t - timedelta(days=1))["value"]},
