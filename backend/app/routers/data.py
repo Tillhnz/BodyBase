@@ -192,6 +192,13 @@ def _scores(db: Session, user: User) -> dict:
     return scores.today_scores(db, user)
 
 
+@router.get("/analysis")
+def analysis(days: int = Query(90, ge=14, le=730), user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Gesamtanalyse über alle Quellen: Gesamtbild, Kennzahlen, Zusammenhänge, Wenn–dann, Muster, Training, Quellen."""
+    from .. import analysis as A
+    return A.report(db, user, days)
+
+
 @router.get("/scores")
 def get_scores(days: int = Query(14, ge=1, le=120), user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Bereitschaft, Auslastung und Schlaf (0–100) mit Aufschlüsselung und Verlauf."""
