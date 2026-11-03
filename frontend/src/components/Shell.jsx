@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { api } from "../api.js";
+import { startRefresh, useRefreshState } from "../refresh.js";
 import ThemeToggle from "./ThemeToggle.jsx";
 import { BrandMark } from "./ui.jsx";
 
@@ -21,6 +22,7 @@ export default function Shell({ user, onLogout, children }) {
   const [ver, setVer] = useState(null);
   useEffect(() => {
     api.get("/version").then(setVer).catch(() => {});
+    startRefresh();
   }, []);
   useEffect(() => {
     const hit = [...NAV].reverse().find((n) => (n.end ? pathname === n.to : pathname.startsWith(n.to)));
@@ -59,8 +61,23 @@ export default function Shell({ user, onLogout, children }) {
         </div>
       </aside>
       <main className="main" id="inhalt" tabIndex={-1}>
+        <RefreshPill />
         <div className="page" key={pathname}>{children}</div>
       </main>
+    </div>
+  );
+}
+
+/** Kleiner Hinweis, solange die Quellen nach dem Laden der Seite abgeglichen werden. */
+function RefreshPill() {
+  const r = useRefreshState();
+  if (r.phase === "idle") return null;
+  const names = r.running.slice(0, 3).join(", ") + (r.running.length > 3 ? ` +${r.running.length - 3}` : "");
+  return (
+    <div className={`refresh-pill${r.phase === "done" ? " done" : ""}`} role="status" aria-live="polite">
+      {r.phase === "running" ? <span className="refresh-spin" aria-hidden="true" /> : <span aria-hidden="true">✓</span>}
+      <span>{r.phase === "running" ? `Hole neue Daten: ${names}` : r.errors.length
+        ? `Aktualisiert, ${r.errors.map((e) => e.name).join(", ")} mit Fehler` : "Alles aktuell"}</span>
     </div>
   );
 }

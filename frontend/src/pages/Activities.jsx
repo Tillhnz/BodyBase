@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.js";
+import { useDataVersion } from "../refresh.js";
 import { Calendar, LoadChart, decodePolyline, useWidth } from "../components/charts.jsx";
 import RouteMap from "../components/RouteMap.jsx";
 import Linked from "../components/Linked.jsx";
@@ -61,7 +62,8 @@ export default function Activities() {
   const [totals, setTotals] = useState(null);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [{ data: stats }] = useAsync(() => api.get(`/activities/stats?days=${days || 3650}`), [days]);
+  const v = useDataVersion();
+  const [{ data: stats }] = useAsync(() => api.get(`/activities/stats?days=${days || 3650}`), [days, v]);
 
   useEffect(() => {
     const id = setTimeout(() => setQuery(q), 300);
@@ -83,9 +85,9 @@ export default function Activities() {
       setLoading(false);
     }).catch((e) => { toast(e.message, "error"); setLoading(false); });
     return () => { alive = false; };
-  }, [days, sport, query, offset]);
+  }, [days, sport, query, offset, v]);
 
-  useEffect(() => { setOffset(0); }, [days, sport, query]);
+  useEffect(() => { setOffset(0); }, [days, sport, query, v]);
 
   const maxMin = Math.max(1, ...(stats?.sports || []).map((s) => s.minutes));
   return (

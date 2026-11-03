@@ -4,6 +4,7 @@ import Coach from "../components/Coach.jsx";
 import HabitsToday from "../habits/HabitsToday.jsx";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
+import { useDataVersion } from "../refresh.js";
 import ScoreCards from "../components/Scores.jsx";
 import { Loading, confirmDialog, toast } from "../components/feedback.jsx";
 import { EmptyState, MetricCard, Segmented, SportIcon, useAsync } from "../components/ui.jsx";
@@ -20,9 +21,10 @@ function greeting() {
 export default function Home({ user }) {
   const [tick, setTick] = useState(0);
   const navigate = useNavigate();
-  const [{ data, loading, error }] = useAsync(() => api.get("/dashboard"), []);
+  const v = useDataVersion();
+  const [{ data, loading, error }] = useAsync(() => api.get("/dashboard"), [v]);
   const keys = (user.prefs?.home?.length ? user.prefs.home : null)?.join(",") || "";
-  const [{ data: summary }] = useAsync(() => api.get(`/summary?keys=${keys}`), [keys]);
+  const [{ data: summary }] = useAsync(() => api.get(`/summary?keys=${keys}`), [keys, v]);
   const [busy, setBusy] = useState(false);
 
   if (loading && !data) return <Loading rows={3} />;
@@ -105,7 +107,7 @@ export default function Home({ user }) {
         {(summary || []).map((item) => <MetricCard key={item.key} item={item} to={`/metric/${item.key}`} />)}
       </div>
 
-      <BodyLoadPanel refreshKey={tick} />
+      <BodyLoadPanel refreshKey={tick + v * 1000} />
 
       <div className="grid-2">
         <section className="panel cat-activity">

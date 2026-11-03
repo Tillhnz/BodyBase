@@ -1,6 +1,7 @@
 """Verbindungen zu den Anbietern: verbinden (OAuth oder Schlüssel), abgleichen, trennen."""
 from __future__ import annotations
 
+from datetime import timedelta
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -242,6 +243,46 @@ def sync_now(conn_id: int, full: bool = False, user: User = Depends(current_user
         db.commit()
     sync.submit(c.id, "manual")
     return {"ok": True}
+
+
+REFRESH_GAP = timedelta(minutes=3)  # Anbieter schützen: dieselbe Quelle höchstens alle 3 Minuten beim Neuladen
+
+
+def _pulled(c: Connection) -> bool:
+    p = providers.get(c.provider)
+    return bool(p and p.kind not in ("push", "file") and c.enabled and c.status != "auth" and not (c.config or {}).get("demo"))
+
+
+@router.post("/sync/refresh")
+def refresh_all(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Beim Laden der Seite: alle abgefragten Quellen sofort abgleichen (außer gerade eben schon geschehen)."""
+    now = utcnow()
+    started, skipped = [], []
+    for c in db.scalars(select(Connection).where(Connection.user_id == user.id)).all():
+        if not _pulled(c):
+            continue
+        name = providers.name_of(c.provider)
+        if sync.is_running(c.id) or c.syncing:
+            started.append(name)
+            continue
+        if c.last_sync_at and now - c.last_sync_at < REFRESH_GAP:
+            skipped.append(name)
+            continue
+        c.syncing = True  # sofort als laufend markieren, auch solange der Auftrag noch wartet
+        db.commit()
+        sync.submit(c.id, "refresh")
+        started.append(name)
+    return {"started": started, "skipped": skipped}
+
+
+@router.get("/sync/status")
+def refresh_status(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Welche Quellen gerade abgeglichen werden."""
+    rows = db.scalars(select(Connection).where(Connection.user_id == user.id)).all()
+    running = [providers.name_of(c.provider) for c in rows if _pulled(c) and (sync.is_running(c.id) or c.syncing)]
+    errors = [{"name": providers.name_of(c.provider), "error": c.last_error} for c in rows
+              if _pulled(c) and c.status == "error" and c.last_sync_at and utcnow() - c.last_sync_at < timedelta(minutes=10)]
+    return {"running": running, "errors": errors}
 
 
 @router.get("/connections/{conn_id}/runs")

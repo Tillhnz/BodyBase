@@ -255,3 +255,13 @@ def test_admin_public_url(client, admin):
             assert r.status_code == 422
     finally:
         client.put("/api/admin/settings", json={"values": {"public_url": before}}, headers=admin)
+
+
+def test_refresh_on_page_load(client):
+    headers, _ = register(client)
+    r = client.post("/api/sync/refresh", headers=headers)
+    assert r.status_code == 200 and r.json() == {"started": [], "skipped": []}
+    # Beispieldaten-Quellen werden nicht abgefragt
+    client.post("/api/me/demo", headers=headers)
+    assert client.post("/api/sync/refresh", headers=headers).json()["started"] == []
+    assert client.get("/api/sync/status", headers=headers).json() == {"running": [], "errors": []}

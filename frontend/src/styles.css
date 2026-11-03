@@ -876,3 +876,14 @@ details > summary { list-style-position: inside; }
 .app-card img { border-radius: 11px; flex: none; }
 .app-card-main { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
 .app-card-main .actions { margin-top: 0.4rem; flex-wrap: wrap; }
+
+/* Abgleich beim Laden der Seite */
+.refresh-pill { position: fixed; z-index: 40; top: 0.9rem; right: 1rem; display: inline-flex; align-items: center; gap: 0.55rem;
+  padding: 0.45rem 0.85rem; border-radius: 999px; font-size: 0.82rem; color: var(--chalk);
+  background: color-mix(in srgb, var(--panel-2) 92%, transparent); border: 1px solid var(--line-2);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25); backdrop-filter: blur(6px); animation: score-in 0.25s ease-out; max-width: calc(100vw - 2rem); }
+.refresh-pill span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.refresh-pill.done { color: var(--good); }
+.refresh-spin { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--iris);
+  animation: spin 0.8s linear infinite; }
+@media (max-width: 800px) { .refresh-pill { top: auto; bottom: calc(5.2rem + env(safe-area-inset-bottom)); left: 1rem; right: 1rem; width: fit-content; margin: 0 auto; } }

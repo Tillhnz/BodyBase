@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
+import { useDataVersion } from "../refresh.js";
 import EntryDialog from "../components/EntryDialog.jsx";
 import Segments from "../components/Segments.jsx";
 import { Loading } from "../components/feedback.jsx";
@@ -23,10 +24,11 @@ export default function Health() {
   const cat = params.get("c") || "body";
   const [entry, setEntry] = useState(false);
   const [reload, setReload] = useState(0);
-  const [{ data: overview }] = useAsync(() => api.get("/overview"), [reload]);
+  const v = useDataVersion();
+  const [{ data: overview }] = useAsync(() => api.get("/overview"), [reload, v]);
   const keys = meta ? meta.metrics.filter((m) => m.category === cat && overview?.metrics[m.key]).map((m) => m.key) : [];
   const [{ data: summary, loading }] = useAsync(() => (keys.length ? api.get(`/summary?keys=${keys.join(",")}&days=30`) : Promise.resolve([])),
-    [keys.join(","), reload]);
+    [keys.join(","), reload, v]);
   if (!meta || !overview) return <Loading rows={2} />;
   const missing = meta.metrics.filter((m) => m.category === cat && !overview.metrics[m.key]);
   const counts = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, meta.metrics.filter((m) => m.category === c && overview.metrics[m.key]).length]));

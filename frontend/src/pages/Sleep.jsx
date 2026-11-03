@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
+import { useDataVersion } from "../refresh.js";
 import { StageBar, useWidth } from "../components/charts.jsx";
 import { Loading } from "../components/feedback.jsx";
 import { EmptyState, Kpi, Segmented, useAsync } from "../components/ui.jsx";
@@ -64,7 +65,8 @@ function SleepBars({ nights, goal }) {
 
 export default function Sleep() {
   const [days, setDays] = useState(30);
-  const [{ data, loading }] = useAsync(() => api.get(`/sleep?days=${days}`), [days]);
+  const v = useDataVersion();
+  const [{ data, loading }] = useAsync(() => api.get(`/sleep?days=${days}`), [days, v]);
   if (loading && !data) return <Loading rows={2} />;
   const nights = data?.nights || [];
   const avg = data?.avg || {};

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from .. import metrics as M
 from .. import providers
 from ..database import get_db
-from ..models import Activity, Connection, Sample, SleepSession, User
+from ..models import Activity, Connection, Sample, SleepSession, SyncRun, User
 from ..security import current_user
 from ..sports import SPORTS
 from ..store import daily_series, priority_for, rank, sources_for
@@ -179,7 +179,11 @@ def _scores(db: Session, user: User) -> dict:
     import time
 
     from .. import scores
-    if time.time() - _scores_written.get(user.id, 0) > 600:
+    # neu rechnen, wenn seit dem letzten Mal ein Abgleich Daten gebracht hat, sonst höchstens alle 10 Minuten
+    newest = db.scalar(select(func.max(SyncRun.finished_at)).join(Connection, SyncRun.connection_id == Connection.id)
+                       .where(Connection.user_id == user.id, SyncRun.ok.is_(True)))
+    fresh = newest is not None and newest.replace(tzinfo=timezone.utc).timestamp() > _scores_written.get(user.id, 0)
+    if fresh or time.time() - _scores_written.get(user.id, 0) > 600:
         _scores_written[user.id] = time.time()
         try:
             scores.refresh(db, user)
