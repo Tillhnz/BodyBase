@@ -5,7 +5,7 @@ from conftest import register
 
 def test_helpers():
     from app import analysis as A
-    assert A._spearman([1, 2, 3, 4, 5], [2, 4, 6, 8, 10]) == 1.0
+    assert abs(A._spearman([1, 2, 3, 4, 5], [2, 4, 6, 8, 10]) - 1) < 1e-9
     assert abs(A._spearman([1, 2, 3, 4, 5], [5, 4, 3, 2, 1]) + 1) < 1e-9
     b, r2 = A._slope([(i, 2 * i + 1) for i in range(10)])
     assert abs(b - 2) < 1e-9 and abs(r2 - 1) < 1e-9
