@@ -229,7 +229,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--iris); outline: 
 .score-chev { flex: none; display: inline-flex; align-items: center; gap: 0.3rem; color: var(--c); font-weight: 600; }
 .score-chev::after { content: ""; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
   transform: translateY(-2px) rotate(45deg); transition: transform 0.2s; }
-.score-card.open .score-chev::after { transform: translateY(1px) rotate(-135deg); }
+.score-card.open .score-chev::after, .segments.open .seg-toggle .score-chev::after { transform: translateY(1px) rotate(-135deg); }
 .score-num { font-family: var(--font-display); font-size: clamp(3.4rem, 5vw, 4.4rem); font-weight: 700; line-height: 0.85; color: var(--c); font-variant-numeric: tabular-nums; min-width: 2ch; }
 .score-hist { flex: 1; display: flex; align-items: flex-end; gap: 3px; height: 46px; }
 .score-hist span { flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; }
@@ -887,3 +887,18 @@ details > summary { list-style-position: inside; }
 .refresh-spin { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--iris);
   animation: spin 0.8s linear infinite; }
 @media (max-width: 800px) { .refresh-pill { top: auto; bottom: calc(5.2rem + env(safe-area-inset-bottom)); left: 1rem; right: 1rem; width: fit-content; margin: 0 auto; } }
+
+/* Muskel- und Fettverteilung: kompakt, Details zum Ausklappen */
+.seg-compact { display: grid; gap: 0.1rem; }
+.seg-row { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) minmax(0, 1fr); gap: 0.6rem; align-items: baseline;
+  padding: 0.45rem 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.seg-row:last-child { border-bottom: 0; }
+.seg-row small { display: block; color: var(--mute); font-size: 0.72rem; }
+.seg-row .delta { font-size: 0.8rem; margin-left: 0.25rem; }
+.seg-toggle { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; width: 100%; margin-top: 0.6rem;
+  padding: 0.6rem 0 0; border: 0; border-top: 1px solid var(--line); background: none; font: inherit; font-size: 0.8rem; cursor: pointer; text-align: left; }
+.segments.open .seg-toggle { margin-bottom: 0.9rem; }
+@media (max-width: 800px) {
+  .body3d { touch-action: pan-y; }
+  .seg-row { grid-template-columns: 4.2rem minmax(0, 1fr) minmax(0, 1fr); font-size: 0.9rem; }
+}

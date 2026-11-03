@@ -102,7 +102,11 @@ def overview(db: Session, user: User, days: int, today_: date) -> dict:
         changes = [s["muscle"]["change"] for s in segs]
         change = round(sum(changes), 2) if all(c is not None for c in changes) else None
         points = round(sum(load.get(m, 0) * w for m, w in weights.items()), 1)
-        regions.append({"region": region, "muscle_kg": round(last, 2), "change_kg": change,
+        fsegs = [s for s in segments if s["region"] == region and "fat" in s]
+        fat = round(sum(s["fat"]["last"] for s in fsegs), 2) if fsegs else None
+        fchanges = [s["fat"]["change"] for s in fsegs]
+        fat_change = round(sum(fchanges), 2) if fsegs and all(c is not None for c in fchanges) else None
+        regions.append({"region": region, "muscle_kg": round(last, 2), "change_kg": change, "fat_kg": fat, "fat_change_kg": fat_change,
                         "change_pct": round(change / (last - change) * 100, 1) if change is not None and last - change else None,
                         "load": points, "comment": _comment(region, change, points, days)})
     return {"has_data": True, "days": days, "segments": segments, "regions": regions, "custom_labels": custom,
