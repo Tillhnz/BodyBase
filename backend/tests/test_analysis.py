@@ -39,3 +39,28 @@ def test_analysis_report_with_demo(client):
     h2, _ = register(client)
     empty = client.get("/api/analysis?days=30", headers=h2).json()
     assert empty["stats"] == [] and empty["correlations"]["keys"] == []
+
+
+def test_week_and_month_report(client):
+    headers, _ = register(client)
+    client.post("/api/me/demo", headers=headers)
+    w = client.get("/api/report/week", headers=headers)
+    assert w.status_code == 200, w.text
+    w = w.json()
+    assert len(w["days"]) == 7 and w["headline"] and w["prev"]
+    assert w["load_verdict"] in ("erholsam", "optimal", "ueber")
+    assert all(d["wd"] for d in w["days"])
+    w2 = client.get(f"/api/report/week?start={w['prev']}", headers=headers).json()
+    assert w2["next"] == w["start"]
+    m = client.get("/api/report/month", headers=headers)
+    assert m.status_code == 200, m.text
+    m = m.json()
+    assert m["restorative"]["days"] and len(m["training"]["weekday"]) == 7
+    assert len(m["training"]["zones"]["rows"]) == 6 and len(m["calendar"]["months"]) == 12
+    assert len(m["physio"]["hrv"]) == 6 and m["behaviour"]
+    prev = client.get(f"/api/report/month?month={m['prev']}", headers=headers).json()
+    assert prev["next"] is not None
+    # leeres Konto
+    h2, _ = register(client)
+    assert client.get("/api/report/week", headers=h2).status_code == 200
+    assert client.get("/api/report/month", headers=h2).status_code == 200

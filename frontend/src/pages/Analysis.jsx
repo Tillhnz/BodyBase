@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { MonthReport, WeekReport } from "./Report.jsx";
 import { api } from "../api.js";
 import { useWidth } from "../components/charts.jsx";
 import { Loading } from "../components/feedback.jsx";
@@ -20,6 +21,25 @@ const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const metricOf = (s) => ({ unit: s.unit, decimals: s.decimals, category: s.category });
 
 export default function Analysis() {
+  const [params, setParams] = useSearchParams();
+  const view = params.get("ansicht") || "woche";
+  const tabs = (
+    <Segmented value={view} onChange={(v) => setParams({ ansicht: v }, { replace: true })} label="Ansicht"
+      options={[{ value: "woche", label: "Woche" }, { value: "monat", label: "Monat" }, { value: "statistik", label: "Statistik" }]} />
+  );
+  if (view === "statistik") return <Statistics tabs={tabs} />;
+  return (
+    <>
+      <div className="page-head">
+        <div><h1>Gesundheitsbild</h1><p>Leistungsbericht aus allen Quellen</p></div>
+        <div className="actions">{tabs}</div>
+      </div>
+      {view === "monat" ? <MonthReport /> : <WeekReport />}
+    </>
+  );
+}
+
+function Statistics({ tabs }) {
   const [days, setDays] = useState(() => { try { return Number(localStorage.getItem("bodybase-analysis-days")) || 90; } catch { return 90; } });
   const v = useDataVersion();
   const [{ data, loading, error }] = useAsync(() => api.get(`/analysis?days=${days}`), [days, v]);
@@ -31,7 +51,7 @@ export default function Analysis() {
         <h1>Gesundheitsbild</h1>
         <p>{data ? `${fmtDate(data.start)} bis ${fmtDate(data.end)} · ${data.coverage.metrics} Messgrößen aus ${data.coverage.sources.length} Quellen, ${data.coverage.activities} Trainings, ${data.coverage.nights} Nächte` : "Alle Quellen zusammen ausgewertet"}</p>
       </div>
-      <div className="actions"><Segmented value={days} onChange={pick} options={RANGES} label="Zeitraum" /></div>
+      <div className="actions">{tabs}<Segmented value={days} onChange={pick} options={RANGES} label="Zeitraum" /></div>
     </div>
   );
   if (error) return <>{head}<EmptyState title="Analyse nicht verfügbar" text={error.message} /></>;

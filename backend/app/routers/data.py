@@ -199,6 +199,21 @@ def analysis(days: int = Query(90, ge=14, le=730), user: User = Depends(current_
     return A.report(db, user, days)
 
 
+@router.get("/report/week")
+def report_week(start: str | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Wochenbericht (Montag bis Sonntag); ohne start die letzte abgeschlossene Woche."""
+    from .. import report
+    return report.week(db, user, date.fromisoformat(start) if start else None)
+
+
+@router.get("/report/month")
+def report_month(month: str | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Monatsbericht; month als JJJJ-MM, ohne Angabe der laufende Monat."""
+    from .. import report
+    y, m = (int(x) for x in month.split("-")) if month else (None, None)
+    return report.month(db, user, y, m)
+
+
 @router.get("/scores")
 def get_scores(days: int = Query(14, ge=1, le=120), user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Bereitschaft, Auslastung und Schlaf (0–100) mit Aufschlüsselung und Verlauf."""
