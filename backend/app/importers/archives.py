@@ -154,7 +154,8 @@ def _strava_csv(w: Writer, data: bytes, z: zipfile.ZipFile | None, progress, nam
         )
         fname = _get(row, c["file"])
         if z is not None and fname and names:
-            real = names.get(fname.lower()) or names.get(fname.lower().lstrip("./"))
+            key = fname.lower().lstrip("./")
+            real = names.get(key) or next((v for k, v in names.items() if k.endswith("/" + key)), None)
             if real:
                 try:
                     p = parsers.parse_activity_file(real, z.read(real))
