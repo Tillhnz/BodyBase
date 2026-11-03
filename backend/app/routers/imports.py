@@ -168,6 +168,92 @@ def _run_apple(job_id: int, path: str) -> None:
                 pass
 
 
+# ---------- Komplette Exporte von Strava und WHOOP (in Teilstücken, damit ein Proxy mit 1-MB-Grenze nicht stört) ----------
+
+ARCHIVE_KINDS = {"strava": "Strava-Export", "whoop": "WHOOP-Export"}
+CHUNK_LIMIT = 8 * 1024 * 1024
+
+
+@router.post("/imports/archive/chunk")
+async def import_archive_chunk(request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    h = request.headers
+    kind = h.get("x-kind", "")
+    if kind not in ARCHIVE_KINDS:
+        raise HTTPException(422, "Unbekannte Art von Export.")
+    try:
+        index, total = int(h.get("x-chunk-index", "")), int(h.get("x-chunk-total", ""))
+    except ValueError:
+        raise HTTPException(422, "Angaben zum Teilstück fehlen.")
+    upload_id = "".join(ch for ch in h.get("x-upload-id", "") if ch.isalnum())[:40]
+    if not upload_id or not (0 <= index < total <= 20000):
+        raise HTTPException(422, "Ungültiges Teilstück.")
+    if index == 0:
+        running = db.scalar(select(ImportJob).where(ImportJob.user_id == user.id, ImportJob.status.in_(("queued", "running"))))
+        if running:
+            raise HTTPException(409, "Es läuft bereits ein Import. Bitte warte, bis er fertig ist.")
+    path = os.path.join(_upload_dir(), f"archive-{user.id}-{upload_id}.part")
+    body = await request.body()
+    if len(body) > CHUNK_LIMIT:
+        raise HTTPException(413, "Teilstück zu groß.")
+    if index == 0 and os.path.exists(path):
+        os.remove(path)
+    if index > 0 and not os.path.exists(path):
+        raise HTTPException(409, "Upload unterbrochen. Bitte die Datei erneut wählen.")
+    with open(path, "ab") as f:
+        f.write(body)
+    if os.path.getsize(path) > settings.max_upload_mb * 1024 * 1024:
+        os.remove(path)
+        raise HTTPException(413, f"Die Datei ist größer als {settings.max_upload_mb} MB.")
+    if index < total - 1:
+        return {"received": index + 1, "total": total}
+    from urllib.parse import unquote
+    job = ImportJob(user_id=user.id, kind=kind, filename=unquote(h.get("x-filename", ARCHIVE_KINDS[kind]))[:255], status="queued", progress=0)
+    db.add(job)
+    db.commit()
+    threading.Thread(target=_run_archive, args=(job.id, kind, path), daemon=True, name=f"import-{job.id}").start()
+    return job_out(job)
+
+
+def _run_archive(job_id: int, kind: str, path: str) -> None:
+    from ..importers import archives
+    with SessionLocal() as db:
+        job = db.get(ImportJob, job_id)
+        job.status = "running"
+        db.commit()
+        last = [0.0]
+
+        def progress(p: float):
+            if p - last[0] >= 0.02 or p >= 1:
+                last[0] = p
+                with SessionLocal() as db2:
+                    j = db2.get(ImportJob, job_id)
+                    j.progress = round(min(p, 0.99), 3)
+                    db2.commit()
+        try:
+            w = Writer(db, job.user_id, kind)
+            info = archives.import_strava(w, path, progress) if kind == "strava" else archives.import_whoop(w, path, progress, job.filename or "")
+            counts = {**w.flush(), **info, "records": sum(v for k, v in info.items() if k in ("activities", "cycles", "sleeps", "workouts"))}
+            job = db.get(ImportJob, job_id)
+            job.status, job.progress, job.counts, job.finished_at = "done", 1.0, counts, utcnow()
+            db.commit()
+        except archives.ArchiveError as e:
+            db.rollback()
+            job = db.get(ImportJob, job_id)
+            job.status, job.message, job.finished_at = "failed", str(e), utcnow()
+            db.commit()
+        except Exception as e:
+            log.exception("Import %s fehlgeschlagen", kind)
+            db.rollback()
+            job = db.get(ImportJob, job_id)
+            job.status, job.message, job.finished_at = "failed", f"{type(e).__name__}: {e}"[:500], utcnow()
+            db.commit()
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
 def job_out(j: ImportJob) -> dict:
     return {"id": j.id, "kind": j.kind, "filename": j.filename, "status": j.status, "progress": j.progress, "message": j.message,
             "counts": j.counts, "created_at": j.created_at.isoformat() + "Z",

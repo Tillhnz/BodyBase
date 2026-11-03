@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, uploadRaw } from "../api.js";
+import { api, uploadRaw, uploadChunked } from "../api.js";
 import { Loading, confirmDialog, toast } from "../components/feedback.jsx";
 import { CopyField, Modal, ProviderLogo, Switch, useAsync } from "../components/ui.jsx";
 import { fmtAgo, fmtNum } from "../fmt.js";
@@ -164,6 +164,7 @@ function SourceDialog({ p, user, onClose, onChange, jobs }) {
         {p.kind === "push" && <PushSetup p={p} />}
         {p.key === "strength" && <div className="actions"><Link className="btn primary" to="/strength">Zum Krafttraining</Link></div>}
         {(p.kind === "file" || p.key === "apple_health") && p.key !== "strength" && <FileImport p={p} onChange={onChange} jobs={jobs} />}
+        {ARCHIVE[p.key] && <ArchiveImport p={p} onChange={onChange} jobs={jobs} />}
         {p.note && <div className="notice" style={{ margin: 0 }}><p className="small">{p.note}</p></div>}
         {p.website && <p className="small" style={{ margin: 0 }}><a href={p.website} target="_blank" rel="noreferrer noopener">{p.website.replace(/^https?:\/\//, "")}</a></p>}
       </div>
@@ -299,6 +300,74 @@ function PushSetup({ p }) {
       {!hae && !hc && <div><div className="field-label small muted">Beispiel</div><pre className="code">{example}</pre>
         <p className="hint">Messgrößen: weight, body_fat, resting_hr, hrv, steps, sleep_duration, glucose … (Liste unter Trends). Außerdem „activities“ und „sleep“.</p></div>}
       <div><button className="link small" onClick={rotate}>Neuen Schlüssel erzeugen</button></div>
+    </div>
+  );
+}
+
+const ARCHIVE = {
+  strava: {
+    title: "Strava-Export hochladen",
+    accept: ".zip,.csv",
+    steps: ["Auf strava.com: Einstellungen → Mein Konto → „Konto herunterladen“ → „Archiv anfordern“. Strava schickt den Link per E-Mail.",
+      "Die ZIP-Datei hier hochladen, so wie sie ist. Alle Aktivitäten mit Strecke, Puls und Karte werden übernommen.",
+      "Ist Strava zusätzlich verbunden, entstehen keine Doppelten: Die Aktivitäts-Nummer ist dieselbe."],
+  },
+  whoop: {
+    title: "WHOOP-Export hochladen",
+    accept: ".zip,.csv",
+    steps: ["In der WHOOP-App: Profil → Einstellungen → „Data Export“. WHOOP schickt die ZIP per E-Mail.",
+      "Die ZIP hier hochladen (oder einzeln physiological_cycles.csv, sleeps.csv, workouts.csv).",
+      "Übernommen werden Recovery, HRV, Ruhepuls, SpO₂, Atemfrequenz, Hauttemperatur, Strain, Schlaf mit Phasen und Trainings mit Pulszonen. Was schon über die Schnittstelle da ist, wird ergänzt statt verdoppelt."],
+  },
+};
+
+function ArchiveImport({ p, onChange, jobs }) {
+  const cfg = ARCHIVE[p.key];
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(null);
+  const [over, setOver] = useState(false);
+  async function handle(files) {
+    const list = [...(files || [])];
+    if (!list.length) return;
+    setBusy(true);
+    try {
+      for (const f of list) {
+        setProgress(0);
+        await uploadChunked("/imports/archive/chunk", f, { "X-Kind": p.key }, setProgress);
+      }
+      toast("Hochgeladen. Der Import läuft im Hintergrund.");
+      onChange();
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  }
+  const last = jobs?.find((j) => j.kind === p.key);
+  const c = last?.counts || {};
+  const summary = p.key === "strava"
+    ? `${fmtNum(c.activities)} Aktivitäten, ${fmtNum(c.with_track)} mit Karte`
+    : `${fmtNum(c.cycles)} Tage, ${fmtNum(c.sleeps)} Nächte, ${fmtNum(c.workouts)} Trainings${c.merged ? `, ${fmtNum(c.merged)} mit vorhandenen zusammengeführt` : ""}`;
+  return (
+    <div className="stack archive-import">
+      <button type="button" className="link small" onClick={() => setOpen(!open)}>{open ? "Datei-Import schließen" : `${cfg.title} (manuell, auch ohne Verbindung)`}</button>
+      {open && (
+        <>
+          <Steps items={cfg.steps} />
+          <label className={`dropzone${over ? " over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+            onDrop={(e) => { e.preventDefault(); setOver(false); handle(e.dataTransfer.files); }}>
+            <input type="file" multiple={p.key === "whoop"} accept={cfg.accept} onChange={(e) => handle(e.target.files)} disabled={busy} />
+            <span>{busy ? "Lade hoch …" : "ZIP hierher ziehen oder klicken"}</span>
+          </label>
+          {progress != null && <div className="progress"><span style={{ width: `${Math.round(progress * 100)}%` }} /></div>}
+        </>
+      )}
+      {last && (
+        <p className="small muted">Letzter Datei-Import: {last.filename} · {last.status === "done" ? `fertig: ${summary}`
+          : last.status === "failed" ? `fehlgeschlagen: ${last.message}` : `läuft (${Math.round((last.progress || 0) * 100)} %)`}</p>
+      )}
     </div>
   );
 }

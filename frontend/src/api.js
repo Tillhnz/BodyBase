@@ -58,6 +58,41 @@ export function uploadRaw(path, file, onProgress) {
   });
 }
 
+/** Große Datei in Teilstücken hochladen (ein Proxy davor erlaubt oft nur 1 MB je Anfrage). */
+export async function uploadChunked(path, file, headers = {}, onProgress) {
+  const size = 900 * 1024;
+  const total = Math.max(1, Math.ceil(file.size / size));
+  const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  let result = null;
+  for (let i = 0; i < total; i += 1) {
+    const part = file.slice(i * size, (i + 1) * size);
+    let tries = 0;
+    for (;;) {
+      try {
+        const r = await fetch(`/api${path}`, {
+          method: "POST", credentials: "same-origin", body: part,
+          headers: { "X-BB-Request": "1", "X-Upload-Id": id, "X-Chunk-Index": String(i), "X-Chunk-Total": String(total),
+            "X-Filename": encodeURIComponent(file.name).slice(0, 200), "Content-Type": "application/octet-stream", ...headers },
+        });
+        const data = await r.json().catch(() => null);
+        if (!r.ok) {
+          const err = new Error((data && typeof data.detail === "string" && data.detail) || `Fehler ${r.status}`);
+          err.fatal = r.status < 500;
+          throw err;
+        }
+        result = data;
+        break;
+      } catch (e) {
+        tries += 1;
+        if (e.fatal || tries >= 3) throw e;
+        await new Promise((res) => setTimeout(res, 1000 * tries));
+      }
+    }
+    if (onProgress) onProgress((i + 1) / total);
+  }
+  return result;
+}
+
 export async function logoutRequest() {
   try { await fetch("/api/auth/logout", { method: "POST", headers: { "X-BB-Request": "1" }, credentials: "same-origin" }); } catch { /* egal */ }
 }
