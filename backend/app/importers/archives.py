@@ -181,15 +181,100 @@ def _strava_csv(w: Writer, data: bytes, z: zipfile.ZipFile | None, progress, nam
 
 
 # ---------- WHOOP ----------
+# Der Export hat je nach App-Sprache englische oder übersetzte Spaltennamen (und teils übersetzte Dateinamen),
+# die Reihenfolge der Spalten ist aber immer gleich. Darum: erst nach Namen (Englisch/Deutsch) suchen, sonst nach Position.
+
+CYCLE_COLS = {  # Feld: (Namen, Position)
+    "start": (("Cycle start time", "Zyklus-Startzeit", "Zyklusbeginn", "Startzeit des Zyklus"), 0),
+    "end": (("Cycle end time", "Zyklus-Endzeit", "Zyklusende", "Endzeit des Zyklus"), 1),
+    "tz": (("Cycle timezone", "Zeitzone"), 2),
+    "rec": (("Recovery score", "Erholung", "Recovery"), 3),
+    "rhr": (("Resting heart rate", "Ruheherzfrequenz", "Ruhepuls"), 4),
+    "hrv": (("Heart rate variability", "Herzfrequenzvariabilität", "HRV"), 5),
+    "skin": (("Skin temp", "Hauttemperatur"), 6),
+    "spo2": (("Blood oxygen", "Blutsauerstoff", "Sauerstoff"), 7),
+    "strain": (("Day Strain", "Tagesbelastung", "Tages-Strain", "Belastung"), 8),
+    "energy": (("Energy burned", "Verbrannte Energie", "Energieverbrauch", "Kalorien"), 9),
+    "onset": (("Sleep onset", "Einschlafzeit", "Schlafbeginn", "Beginn des Schlafs"), 12),
+    "wake": (("Wake onset", "Aufwachzeit", "Aufwachen", "Weckzeit"), 13),
+    "perf": (("Sleep performance", "Schlafleistung"), 14),
+    "resp": (("Respiratory rate", "Atemfrequenz"), 15),
+    "asleep": (("Asleep duration", "Schlafdauer", "Dauer im Schlaf"), 16),
+    "light": (("Light sleep duration", "Leichtschlaf"), 18),
+    "deep": (("Deep (SWS) duration", "Tiefschlaf"), 19),
+    "rem": (("REM duration", "REM"), 20),
+    "awake": (("Awake duration", "Wach"), 21),
+    "eff": (("Sleep efficiency", "Schlafeffizienz"), 24),
+}
+SLEEP_COLS = {
+    "tz": (("Cycle timezone", "Zeitzone"), 2),
+    "onset": (CYCLE_COLS["onset"][0], 3), "wake": (CYCLE_COLS["wake"][0], 4), "perf": (CYCLE_COLS["perf"][0], 5),
+    "resp": (CYCLE_COLS["resp"][0], 6), "asleep": (CYCLE_COLS["asleep"][0], 7), "light": (CYCLE_COLS["light"][0], 9),
+    "deep": (CYCLE_COLS["deep"][0], 10), "rem": (CYCLE_COLS["rem"][0], 11), "awake": (CYCLE_COLS["awake"][0], 12),
+    "eff": (CYCLE_COLS["eff"][0], 15), "nap": (("Nap", "Nickerchen", "Schläfchen"), 17),
+}
+WORKOUT_COLS = {
+    "tz": (("Cycle timezone", "Zeitzone"), 2),
+    "start": (("Workout start time", "Trainingsstartzeit", "Trainingsbeginn", "Startzeit des Trainings", "Workout-Startzeit"), 3),
+    "end": (("Workout end time", "Trainingsendzeit", "Trainingsende", "Endzeit des Trainings", "Workout-Endzeit"), 4),
+    "dur": (("Duration", "Dauer"), 5),
+    "name": (("Activity name", "Aktivitätsname", "Aktivität", "Sportart"), 6),
+    "strain": (("Activity Strain", "Aktivitätsbelastung", "Belastung"), 7),
+    "energy": (("Energy burned", "Verbrannte Energie", "Energieverbrauch", "Kalorien"), 8),
+    "max": (("Max HR", "Max. HF", "Maximale Herzfrequenz", "Max. Herzfrequenz"), 9),
+    "avg": (("Average HR", "Durchschnittliche HF", "Ø HF", "Durchschnittliche Herzfrequenz"), 10),
+    "dist": (("Distance", "Distanz", "Strecke", "Entfernung"), 17),
+    "alt": (("Altitude gain", "Höhengewinn", "Höhenmeter", "Anstieg"), 18),
+}
+ZONE_POS = [11, 12, 13, 14, 15]
+EXPECTED = {"cycles": 26, "sleeps": 18, "workouts": 20}
+
+
+def _cols(h: list[str], spec: dict, expected: int) -> dict:
+    """Spaltennummer je Feld: Name (EN/DE), sonst feste Position, wenn die Datei die erwartete Spaltenzahl hat."""
+    by_pos = len(h) >= expected
+    out = {}
+    for field, (names, pos) in spec.items():
+        i = _col(h, *names)
+        if i is None and by_pos:
+            i = pos
+        out[field] = i
+    return out
+
+
+def _kind(name: str, h: list[str]) -> str | None:
+    """Welche WHOOP-Tabelle: nach Dateiname (EN/DE), sonst nach Spaltennamen, sonst nach Spaltenzahl."""
+    n = name.lower()
+    head = " ".join(h).lower()
+    if "journal" in n or "tagebuch" in n:
+        return None
+    if "workout" in n or "training" in n or "workout start" in head or "trainingsst" in head:
+        return "workouts"
+    if "sleep" in n or "schlaf" in n.rsplit("/", 1)[-1] and "zykl" not in n:
+        return "sleeps"
+    if "cycle" in n or "zykl" in n or "physio" in n or "recovery score" in head or "erholung" in head:
+        return "cycles"
+    if "nap" in head or "nickerchen" in head:
+        return "sleeps"
+    return {26: "cycles", 25: "cycles", 18: "sleeps", 20: "workouts"}.get(len(h))
+
 
 def whoop_time(s: str, tzs: str) -> datetime | None:
-    """„2024-03-01 22:14:05“ in Ortszeit plus Spalte „Cycle timezone“ wie „UTC+01:00“ → UTC ohne Zone."""
+    """„2024-03-01 22:14:05“ (oder „01.03.2024 22:14:05“) in Ortszeit plus Zeitzone wie „UTC+01:00“ → UTC ohne Zone."""
     s = (s or "").strip()
     if not s:
         return None
+    dt = None
     try:
         dt = datetime.fromisoformat(s.replace("T", " ").replace("Z", ""))
     except ValueError:
+        for fmt in ("%d.%m.%Y %H:%M:%S", "%d.%m.%Y %H:%M", "%d.%m.%Y, %H:%M:%S", "%m/%d/%Y %H:%M:%S", "%m/%d/%Y %I:%M:%S %p", "%Y/%m/%d %H:%M:%S"):
+            try:
+                dt = datetime.strptime(s, fmt)
+                break
+            except ValueError:
+                pass
+    if dt is None:
         return None
     if dt.tzinfo is not None:
         return dt.astimezone(timezone.utc).replace(tzinfo=None)
@@ -209,47 +294,44 @@ def _near(index: dict[int, str], start: datetime, minutes: int = 10) -> str | No
     return None
 
 
+def _truthy(v: str) -> bool:
+    return v.strip().lower() in ("true", "1", "yes", "ja", "wahr", "x")
+
+
 def import_whoop(w: Writer, path: str, progress=lambda p: None, filename: str = "") -> dict:
-    files: dict[str, bytes] = {}
+    raw: list[tuple[str, bytes]] = []
     if zipfile.is_zipfile(path):
         with zipfile.ZipFile(path) as z:
-            for n in z.namelist():
-                base = n.rsplit("/", 1)[-1].lower()
-                if base in ("physiological_cycles.csv", "sleeps.csv", "workouts.csv"):
-                    files[base] = z.read(n)
+            raw = [(n, z.read(n)) for n in z.namelist() if n.lower().endswith(".csv")]
     else:
         with open(path, "rb") as f:
-            data = f.read()
-        head = data[:3000].decode("utf-8-sig", errors="replace").lower()
-        if "workout start time" in head:
-            files["workouts.csv"] = data
-        elif "recovery score" in head:
-            files["physiological_cycles.csv"] = data
-        elif "sleep onset" in head:
-            files["sleeps.csv"] = data
-    if not files:
-        raise ArchiveError("Keine WHOOP-Daten gefunden. Erwartet wird die ZIP aus „Data Export“ (physiological_cycles.csv, sleeps.csv, workouts.csv).")
+            raw = [(filename or "upload.csv", f.read())]
+    tables: dict[str, tuple[list[str], list[list[str]]]] = {}
+    for name, data in raw:
+        h, rows = _rows(data)
+        kind = _kind(name, h) if h else None
+        if kind and kind not in tables:
+            tables[kind] = (h, rows)
+    if not tables:
+        raise ArchiveError("Keine WHOOP-Daten gefunden. Erwartet wird die ZIP aus „Data Export“ "
+                           "(Tabellen zu Zyklen, Schlaf und Trainings).")
     db = w.db
     acts = {int(a.start.timestamp() // 60): a.source_id for a in db.scalars(
         select(Activity).where(Activity.user_id == w.user_id, Activity.source == "whoop"))}
     nights = {int(s.start.timestamp() // 60): s.source_id for s in db.scalars(
         select(SleepSession).where(SleepSession.user_id == w.user_id, SleepSession.source == "whoop"))}
-    stats = {"cycles": 0, "sleeps": 0, "workouts": 0, "merged": 0}
-    done_sleep_from_cycles = "sleeps.csv" in files
+    stats = {"cycles": 0, "sleeps": 0, "workouts": 0, "merged": 0, "skipped_rows": 0}
 
-    if "physiological_cycles.csv" in files:
-        h, rows = _rows(files["physiological_cycles.csv"])
-        c = {k: _col(h, *v) for k, v in {
-            "start": ("Cycle start time",), "end": ("Cycle end time",), "tz": ("Cycle timezone",), "rec": ("Recovery score",),
-            "rhr": ("Resting heart rate",), "hrv": ("Heart rate variability",), "skin": ("Skin temp",), "spo2": ("Blood oxygen",),
-            "strain": ("Day Strain",), "energy": ("Energy burned",), "onset": ("Sleep onset",), "wake": ("Wake onset",),
-            "resp": ("Respiratory rate",)}.items()}
+    if "cycles" in tables:
+        h, rows = tables["cycles"]
+        c = _cols(h, CYCLE_COLS, EXPECTED["cycles"])
         skins: list[float] = []
-        for i, row in enumerate(rows):
+        for row in rows:
             tzs = _get(row, c["tz"])
             wake = whoop_time(_get(row, c["wake"]), tzs) or whoop_time(_get(row, c["start"]), tzs)
             end = whoop_time(_get(row, c["end"]), tzs)
             if not wake:
+                stats["skipped_rows"] += 1
                 continue
             w.sample("recovery", wake, _num(_get(row, c["rec"])))
             w.sample("resting_hr", wake, _num(_get(row, c["rhr"])))
@@ -265,29 +347,29 @@ def import_whoop(w: Writer, path: str, progress=lambda p: None, filename: str = 
                 w.sample("strain", end, _num(_get(row, c["strain"])))
                 w.sample("total_energy", end, _num(_get(row, c["energy"])))
             stats["cycles"] += 1
-            if not done_sleep_from_cycles:
-                if _sleep_row(w, h, row, nights, stats):
-                    stats["sleeps"] += 1
+            if "sleeps" not in tables and _sleep_row(w, c, row, nights, stats):
+                stats["sleeps"] += 1
         progress(0.4)
 
-    if "sleeps.csv" in files:
-        h, rows = _rows(files["sleeps.csv"])
+    if "sleeps" in tables:
+        h, rows = tables["sleeps"]
+        c = _cols(h, SLEEP_COLS, EXPECTED["sleeps"])
         for row in rows:
-            if _sleep_row(w, h, row, nights, stats):
+            if _sleep_row(w, c, row, nights, stats):
                 stats["sleeps"] += 1
         progress(0.7)
 
-    if "workouts.csv" in files:
-        h, rows = _rows(files["workouts.csv"])
-        c = {k: _col(h, *v) for k, v in {
-            "tz": ("Cycle timezone",), "start": ("Workout start time",), "end": ("Workout end time",), "dur": ("Duration",),
-            "name": ("Activity name",), "strain": ("Activity Strain",), "energy": ("Energy burned",), "max": ("Max HR",),
-            "avg": ("Average HR",), "dist": ("Distance",), "alt": ("Altitude gain",)}.items()}
-        zones = [_col(h, f"HR Zone {i}") for i in range(1, 6)]
+    if "workouts" in tables:
+        h, rows = tables["workouts"]
+        c = _cols(h, WORKOUT_COLS, EXPECTED["workouts"])
+        zones = [_col(h, f"HR Zone {i}", f"HF-Zone {i}", f"Herzfrequenzzone {i}", f"Zone {i}") for i in range(1, 6)]
+        if any(z is None for z in zones) and len(h) >= EXPECTED["workouts"]:
+            zones = ZONE_POS
         for row in rows:
             tzs = _get(row, c["tz"])
             start, end = whoop_time(_get(row, c["start"]), tzs), whoop_time(_get(row, c["end"]), tzs)
             if not start:
+                stats["skipped_rows"] += 1
                 continue
             sid = _near(acts, start)
             if sid:
@@ -304,15 +386,14 @@ def import_whoop(w: Writer, path: str, progress=lambda p: None, filename: str = 
                 load=_num(_get(row, c["strain"])), details=details,
             ))
             stats["workouts"] += 1
+    if not (stats["cycles"] or stats["sleeps"] or stats["workouts"]):
+        raise ArchiveError("Die WHOOP-Tabellen wurden gefunden, aber keine Zeile war lesbar (Datumsformat?). "
+                           "Bitte die erste Zeile einer der CSV-Dateien an den Support schicken.")
     progress(1.0)
     return stats
 
 
-def _sleep_row(w: Writer, h: list[str], row: list[str], nights: dict, stats: dict) -> bool:
-    c = {k: _col(h, *v) for k, v in {
-        "tz": ("Cycle timezone",), "onset": ("Sleep onset",), "wake": ("Wake onset",), "perf": ("Sleep performance",),
-        "asleep": ("Asleep duration",), "light": ("Light sleep duration",), "deep": ("Deep (SWS) duration", "Deep"),
-        "rem": ("REM duration",), "awake": ("Awake duration",), "eff": ("Sleep efficiency",), "nap": ("Nap",)}.items()}
+def _sleep_row(w: Writer, c: dict, row: list[str], nights: dict, stats: dict) -> bool:
     tzs = _get(row, c["tz"])
     start, end = whoop_time(_get(row, c["onset"]), tzs), whoop_time(_get(row, c["wake"]), tzs)
     if not start or not end:
@@ -324,7 +405,7 @@ def _sleep_row(w: Writer, h: list[str], row: list[str], nights: dict, stats: dic
         source_id=sid or f"export-{int(start.timestamp())}", start=start, end=end, asleep_min=_num(_get(row, c["asleep"])),
         deep_min=_num(_get(row, c["deep"])), rem_min=_num(_get(row, c["rem"])), light_min=_num(_get(row, c["light"])),
         awake_min=_num(_get(row, c["awake"])), score=_num(_get(row, c["perf"])), efficiency=_num(_get(row, c["eff"])),
-        nap=_get(row, c["nap"]).lower() in ("true", "1", "yes", "ja"),
+        nap=_truthy(_get(row, c.get("nap"))) if c.get("nap") is not None else False,
     ))
     nights[int(start.timestamp() // 60)] = sid or f"export-{int(start.timestamp())}"
     return True

@@ -96,3 +96,36 @@ def test_archive_rejects_bad_input(client):
     assert r.status_code == 422
     job = _upload(client, headers, "whoop", b"kein zip und kein csv", "foo.txt")
     assert job["status"] == "failed" and "WHOOP" in job["message"]
+
+
+def _german(csv_text: str, headers: str) -> str:
+    """Gleiche Daten, aber übersetzte (teils unbekannte) Spaltennamen."""
+    return headers + "\n" + csv_text.split("\n", 1)[1]
+
+
+def test_whoop_export_german(client):
+    headers, _ = register(client)
+    cycles = _german(CYCLES, "Zyklus-Startzeit,Zyklus-Endzeit,Zeitzone des Zyklus,Erholungswert %,Ruheherzfrequenz (S/min),"
+                             "Herzfrequenzvariabilität (ms),Hauttemperatur (Celsius),Blutsauerstoff %,Tagesbelastung,Verbrannte Energie (kal),"
+                             "Max. HF (S/min),Durchschnittliche HF (S/min),Schlafbeginn,Aufwachzeit,Schlafleistung %,Atemfrequenz (U/min),"
+                             "Schlafdauer (Min.),Zeit im Bett (Min.),Leichtschlafdauer (Min.),Tiefschlafdauer (SWS) (Min.),REM-Dauer (Min.),"
+                             "Wachdauer (Min.),Schlafbedarf (Min.),Schlafdefizit (Min.),Schlafeffizienz %,Schlafkonstanz %")
+    sleeps = _german(SLEEPS, ",".join(f"Spalte {i}" for i in range(18)))  # völlig unbekannte Namen: nach Position
+    workouts = _german(WORKOUTS, ",".join(f"Feld {i}" for i in range(20)))
+    data = _zip({"meine_whoop_daten/physiologische_zyklen.csv": cycles, "meine_whoop_daten/schlaf.csv": sleeps,
+                 "meine_whoop_daten/trainings.csv": workouts})
+    job = _upload(client, headers, "whoop", data, "meine_whoop_daten.zip")
+    assert job["status"] == "done", job
+    assert job["counts"]["cycles"] == 1 and job["counts"]["sleeps"] == 1 and job["counts"]["workouts"] == 1
+    assert client.get("/api/metrics/hrv?start=2026-10-05&end=2026-10-05", headers=headers).json()["series"][0]["value"] == 64
+    assert client.get("/api/metrics/recovery?start=2026-10-05&end=2026-10-05", headers=headers).json()["series"][0]["value"] == 71
+    n = next(x for x in client.get("/api/sleep?days=3650", headers=headers).json()["nights"] if x["day"] == "2026-10-05")
+    assert round(n["deep_min"]) == 95 and round(n["rem_min"]) == 115
+    act = client.get("/api/activities", headers=headers).json()["items"][0]
+    assert act["avg_hr"] == 118 and act["sport"] == "strength"
+
+
+def test_whoop_german_dates_and_decimals():
+    from app.importers.archives import _num, whoop_time
+    assert whoop_time("05.10.2026 06:50:00", "UTC+02:00").isoformat() == "2026-10-05T04:50:00"
+    assert _num("33,6") == 33.6 and _num("1.234,5") == 1234.5
