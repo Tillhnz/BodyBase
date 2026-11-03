@@ -162,6 +162,7 @@ export default function ScoreCards({ scores, sleep, goals = [] }) {
           <Parts parts={sl?.parts} />
         </Card>
       </div>
+      <Link className="analysis-link" to="/analysis">Ganzes Gesundheitsbild ansehen: alle Quellen, Zusammenhänge und Statistiken</Link>
     </>
   );
 }

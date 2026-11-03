@@ -11,6 +11,7 @@ export const NAV = [
   { to: "/strength", label: "Kraft", icon: "M4 9 V15 M7 7 V17 M17 7 V17 M20 9 V15 M7 12 H17" },
   { to: "/sleep", label: "Schlaf", icon: "M20 14.5 A8 8 0 1 1 9.5 4 A6.5 6.5 0 0 0 20 14.5 Z" },
   { to: "/health", label: "Gesundheit", short: "Körper", icon: "M12 20 C6 16 3 12.5 3 9 A4.5 4.5 0 0 1 12 6.5 A4.5 4.5 0 0 1 21 9 C21 12.5 18 16 12 20 Z M7 11 H9.5 L11 8.5 L13 13 L14.5 11 H17" },
+  { to: "/analysis", label: "Gesundheitsbild", short: "Analyse", desk: true, icon: "M4 20 V10 M10 20 V4 M16 20 V13 M22 20 H2" },
   { to: "/trends", label: "Trends", desk: true, icon: "M3 17 L9 11 L13 15 L21 7 M15 7 H21 V13" },
   { to: "/sources", label: "Quellen", icon: "M12 3 V9 M12 15 V21 M3 12 H9 M15 12 H21 M12 12 H12.01 M5.6 5.6 L9 9 M15 15 L18.4 18.4 M18.4 5.6 L15 9 M9 15 L5.6 18.4" },
   { to: "/settings", label: "Einstellungen", short: "Konto", icon: "M12 9 A3 3 0 1 0 12.01 9 M12 3 V5 M12 19 V21 M3 12 H5 M19 12 H21 M5.6 5.6 L7 7 M17 17 L18.4 18.4 M18.4 5.6 L17 7 M7 17 L5.6 18.4" },

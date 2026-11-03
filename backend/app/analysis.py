@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from . import metrics as M
 from . import providers, scores
-from .models import Activity, Sample, User, Workout
+from .models import Sample, User, Workout
 from .sports import SPORTS
 from .store import daily_series, priority_for
 from .timeutil import today, tz
@@ -37,10 +37,20 @@ CORE = ["bb_readiness", "bb_sleep", "bb_load", "hrv", "resting_hr", "sleep_durat
 # Paare, die per Definition zusammenhängen (Bestandteile): in der Matrix sichtbar, aber keine „Erkenntnis“
 _FAMILIES = [
     {"bb_sleep", "sleep_duration", "sleep_deep", "sleep_rem", "sleep_efficiency"},
-    {"bb_readiness", "hrv", "resting_hr", "bb_sleep"},
+    {"bb_readiness", "hrv", "resting_hr", "bb_sleep", "sleep_duration", "sleep_deep", "sleep_rem", "sleep_efficiency"},
     {"bb_load", "steps", "active_minutes", "active_energy"},
     {"weight", "body_fat", "muscle_mass"},
 ]
+
+
+# Wann am Tag etwas entsteht: Nacht- und Morgenwerte (0) kommen vor Tageswerten (1). Am selben Tag wird immer
+# „früh → später“ formuliert, also z. B. Schlaf → Schritte und nicht umgekehrt.
+_DAYTIME = {"steps", "active_minutes", "active_energy", "bb_load", "stress", "calories_in", "protein", "water", "caffeine",
+            "mindful_minutes", "glucose", "bp_systolic"}
+
+
+def _order(key, keys):
+    return (1 if key in _DAYTIME else 0, keys.index(key))
 
 
 # ---------- Grundrechnungen ----------
@@ -156,6 +166,8 @@ def fmt_metric(key, v, signed=False):
     digits = m.decimals if m else 1
     if m and m.key == "steps":
         digits = 0
+    if signed and digits == 0 and 0 < abs(v) < 1:
+        digits = 1  # kleine Unterschiede nicht als „±0“ zeigen
     s = num(abs(v) if signed else v, digits)
     if signed:
         s = ("+" if v > 0 else "−" if v < 0 else "±") + s
@@ -245,7 +257,7 @@ def metric_stats(data: Data, key: str) -> dict | None:
         "delta_pct": ((mean - prev_mean) / abs(prev_mean) * 100) if prev_mean else None,
         "cv": (sd / abs(mean) * 100) if sd and mean else None,
         "weekday": [_mean(w) for w in weekday], "weekday_n": [len(w) for w in weekday],
-        "sources": sorted({s for d, s in data.source_of.get(key, {}).items() if d >= data.start}),
+        "sources": sorted({providers.name_of(s) for d, s in data.source_of.get(key, {}).items() if d >= data.start}),
     }
 
 
@@ -268,32 +280,65 @@ def _pairs(xs: dict[date, float], ys: dict[date, float], lag: int):
     return [p[0] for p in out], [p[1] for p in out]
 
 
+def _detrend(series: dict[date, float], half=14) -> dict[date, float]:
+    """Abweichung vom eigenen gleitenden Mittel (±14 Tage) und vom Wochentagsmuster: langsame Trends (z. B. Gewicht sinkt, Ruhepuls sinkt)
+    würden sonst Zusammenhänge vortäuschen, die nur am gemeinsamen Zeitverlauf liegen."""
+    out = {}
+    for d, v in series.items():
+        win = [series[x] for x in (d + timedelta(days=i) for i in range(-half, half + 1)) if x in series]
+        if len(win) >= 5:
+            out[d] = v - sum(win) / len(win)
+    # zusätzlich das Wochentagsmuster herausrechnen: sonst hängen z. B. „Wiegen am Freitag“ und „Radtour am Samstag“
+    # nur über den Kalender zusammen
+    by_wd = defaultdict(list)
+    for d, v in out.items():
+        by_wd[d.weekday()].append(v)
+    wd_mean = {w: sum(v) / len(v) for w, v in by_wd.items() if len(v) >= 3}
+    return {d: v - wd_mean.get(d.weekday(), 0.0) for d, v in out.items()}
+
+
 def correlations(data: Data, keys: list[str]) -> dict:
     matrix = {0: [], 1: []}
     findings = []
+    dt = {k: _detrend(data.series[k]) for k in keys}
+    cur = {k: {d: v for d, v in dt[k].items() if data.start <= d <= data.end} for k in keys}
     for lag in (0, 1):
         for a in keys:
             row = []
             for b in keys:
                 if lag == 0 and a == b:
-                    row.append({"r": 1.0, "n": len(data.cur(a)), "p": 0.0})
+                    row.append({"r": 1.0, "n": len(cur[a]), "p": 0.0})
                     continue
-                xs, ys = _pairs(data.cur(a), data.cur(b), lag)
+                xs, ys = _pairs(cur[a], cur[b], lag)
                 r = _spearman(xs, ys) if len(xs) >= 10 else None
                 p = _p_corr(r, len(xs)) if r is not None else None
                 row.append({"r": round(r, 3) if r is not None else None, "n": len(xs), "p": p})
-                if r is None or p is None or abs(r) < 0.2 or p >= 0.05 or _trivial(a, b) or len(xs) < 14:
+                if r is None or p is None or _trivial(a, b) or len(xs) < 20:
                     continue
-                if lag == 0 and keys.index(b) < keys.index(a):
-                    continue  # am selben Tag ist a~b dasselbe wie b~a
-                findings.append(_finding(data, a, b, lag, r, len(xs), p, xs, ys))
+                if lag == 0 and _order(b, keys) < _order(a, keys):
+                    continue  # am selben Tag ist a~b dasselbe wie b~a: nur in der Reihenfolge früh → später
+                findings.append((a, b, lag, r, len(xs), p, xs, ys))
             matrix[lag].append(row)
-    findings.sort(key=lambda f: -abs(f["r"]))
+    # Viele Paare gleichzeitig getestet: Falschentdeckungsrate nach Benjamini-Hochberg begrenzen (q < 0,1)
+    tested = len(findings)
+    ranked = sorted(findings, key=lambda f: f[5])
+    q_of, prev_q = {}, 1.0
+    for i in range(len(ranked) - 1, -1, -1):
+        prev_q = min(prev_q, ranked[i][5] * tested / (i + 1))
+        q_of[id(ranked[i])] = prev_q
+    # zwei Stufen: „belastbar“ (nach der Korrektur q < 0,1) und „Hinweis“ (einzeln p < 0,05, könnte aber Zufall sein)
+    findings = [_finding(data, a, b, lag, r, n, p, xs, ys, q_of[id(f)]) for f in findings
+                for (a, b, lag, r, n, p, xs, ys) in [f]
+                if (abs(r) >= 0.2 and q_of[id(f)] < 0.1) or (abs(r) >= 0.25 and p < 0.05 and n >= 40)]
+    for f in findings:
+        f["solid"] = f["q"] < 0.1
+    # belastbare nach Stärke, Hinweise nach Signifikanz (große r aus wenigen Tagen sind oft Zufall)
+    findings.sort(key=lambda f: (not f["solid"], -abs(f["r"]) if f["solid"] else f["p"]))
     return {"keys": keys, "labels": [_label(k) for k in keys], "same_day": matrix[0], "next_day": matrix[1],
-            "findings": findings[:16]}
+            "findings": findings[:16], "tested": tested}
 
 
-def _finding(data, a, b, lag, r, n, p, xs, ys):
+def _finding(data, a, b, lag, r, n, p, xs, ys, q=None):
     strength = "deutlich" if abs(r) >= 0.5 else "spürbar" if abs(r) >= 0.3 else "leicht"
     sx = _sd(xs) or 0
     # Wirkung in Einheiten: Regression auf den Rohwerten, für „eine typische Schwankung“ von a
@@ -302,9 +347,9 @@ def _finding(data, a, b, lag, r, n, p, xs, ys):
     slope = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx if sxx else 0
     when = "am Folgetag" if lag else "am selben Tag"
     direction = "höher" if r > 0 else "niedriger"
-    text = (f"Ist {_label(a)} höher, ist {_label(b)} {when} {strength} {direction}: "
+    text = (f"Liegt {_label(a)} über deinem Üblichen, ist der Wert für {_label(b)} {when} {strength} {direction}: "
             f"je {fmt_metric(a, sx)} mehr {_label(a)} im Schnitt {fmt_metric(b, slope * sx, signed=True)}.")
-    return {"a": a, "b": b, "lag": lag, "r": round(r, 3), "n": n, "p": p, "strength": strength, "text": text,
+    return {"a": a, "b": b, "lag": lag, "r": round(r, 3), "n": n, "p": p, "q": q, "strength": strength, "text": text,
             "effect": slope * sx}
 
 
@@ -717,7 +762,7 @@ def summary(doms: list[dict], corr: dict, comps: list[dict], st: dict) -> dict:
             attention.append(f"{s['label']} entwickelt sich ungünstig ({fmt_metric(k, s['fitted_change'], signed=True)})")
     for c in comps:
         for r in c["rows"]:
-            if r["clear"] and r["good"] is False and c["title"].startswith(("Spätes", "Harte", "Koffein")):
+            if r["clear"] and r["good"] is False and c["title"].startswith(("Spätes", "Koffein")):
                 attention.append(f"{c['title']}: {r['label']} {r['when']} {r['diff_text']} ({c['a']} gegenüber {c['b']})")
                 break
     return {"strengths": strengths[:6], "attention": attention[:6],
@@ -728,6 +773,14 @@ def summary(doms: list[dict], corr: dict, comps: list[dict], st: dict) -> dict:
 
 def report(db: Session, user: User, days: int = 90) -> dict:
     data = Data(db, user, days)
+    # Auslastung gibt es für jeden Tag (Ruhetage = 0), gespeichert sind nur Tage mit Last: für die Statistik auffüllen
+    if data.acts or "bb_load" in data.series:
+        span = (data.end - data.prev_start).days + 1
+        data.series["bb_load"] = {data.prev_start + timedelta(days=i): data.ctx.load(data.prev_start + timedelta(days=i))["value"]
+                                  for i in range(span)}
+        data.source_of["bb_load"] = {d: "bodybase" for d in data.series["bb_load"]}
+        if "bb_load" not in data.keys:
+            data.keys.append("bb_load")
     st = {k: s for k in data.keys if (s := metric_stats(data, k))}
     core = [k for k in CORE if k in st and st[k]["n"] >= 14]
     corr = correlations(data, core[:16])

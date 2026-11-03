@@ -14,6 +14,7 @@ import Settings from "./pages/Settings.jsx";
 import Sleep from "./pages/Sleep.jsx";
 import Sources from "./pages/Sources.jsx";
 import Trends from "./pages/Trends.jsx";
+import Analysis from "./pages/Analysis.jsx";
 import Strength from "./strength/Strength.jsx";
 import Habits from "./habits/Habits.jsx";
 import ApiDocs from "./pages/ApiDocs.jsx";
@@ -86,6 +87,7 @@ export default function App() {
             <Route path="/health" element={<Health />} />
             <Route path="/metric/:key" element={<MetricDetail user={user} onUser={setUser} />} />
             <Route path="/trends" element={<Trends />} />
+            <Route path="/analysis" element={<Analysis />} />
             <Route path="/sources" element={<Sources user={user} />} />
             <Route path="/settings" element={<Settings user={user} onChange={setUser} />} />
             {user.is_admin && <Route path="/admin" element={<Admin user={user} />} />}
