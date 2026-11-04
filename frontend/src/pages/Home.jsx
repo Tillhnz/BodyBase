@@ -218,7 +218,7 @@ function BodyLoadPanel({ refreshKey }) {
               </button>
             ))}
           </div>
-          <BodyMap values={values} unit="Punkte" detail={detail} color={color} />
+          <BodyMap values={values} unit="Punkte" detail={detail} color={color} levels />
           <p className="hint">Tippe eine oder mehrere Aktivitäten an, um nur deren Belastung zu sehen. Ein Punkt entspricht etwa einem Arbeitssatz; Ausdauer zählt je 10 Minuten anteilig für die beteiligten Muskeln, Gewohnheiten mit 12 Wiederholungen je Satz.</p>
         </>
       )}

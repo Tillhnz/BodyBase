@@ -201,7 +201,7 @@ function Stats({ sum, days }) {
           <div className="panel-head"><h2>Muskelverteilung</h2><span className="tiny muted">Arbeitssätze, Nebenmuskeln zählen halb</span></div>
           {sum.groups.length ? (
             <>
-              <BodyMap values={Object.fromEntries(sum.muscles.map((x) => [x.muscle, x.sets]))} unit="Sätze" list={false} size="sm" />
+              <BodyMap values={Object.fromEntries(sum.muscles.map((x) => [x.muscle, x.sets]))} unit="Sätze" list={false} size="sm" levels />
               <div className="group-bars" style={{ marginTop: "1rem" }}>
                 {sum.groups.map((g) => (
                   <div key={g.group} className="group-bar" style={{ "--c": GROUP_COLORS[g.group] || "var(--iris)" }}>

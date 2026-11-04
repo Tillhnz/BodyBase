@@ -59,13 +59,22 @@ export const MUSCLE_LABELS = {
   abductors: "Abduktoren", neck: "Hals",
 };
 
-function Figure({ shapes, values, max, title, hover, setHover, color }) {
+/** Stufen statt Farbverlauf: rot = zu wenig, orange = mittel, grün = viel (im Verhältnis zur meistbeanspruchten Region). */
+export const LEVELS = [
+  { max: 0.34, color: "var(--signal)", label: "wenig" },
+  { max: 0.67, color: "var(--c-activity)", label: "mittel" },
+  { max: Infinity, color: "var(--good)", label: "viel" },
+];
+const levelOf = (t) => LEVELS.find((l) => t < l.max) || LEVELS[2];
+
+function Figure({ shapes, values, max, title, hover, setHover, color, levels }) {
   return (
     <svg className="body-fig" viewBox="20 2 120 342" role="img" aria-label={title}>
       {shapes.map((s, i) => {
         const v = s.muscle ? values[s.muscle] || 0 : 0;
         const t = s.muscle && max > 0 ? Math.min(1, v / max) : 0;
-        const fill = t > 0 ? `color-mix(in srgb, ${color} ${Math.round(28 + 72 * t)}%, var(--body-base))` : undefined;
+        const fill = t <= 0 ? (levels && s.muscle ? "var(--body-none)" : undefined) : levels ? levelOf(t).color
+          : `color-mix(in srgb, ${color} ${Math.round(28 + 72 * t)}%, var(--body-base))`;
         const cls = `body-part${s.muscle ? " m" : " n"}${hover && hover === s.muscle ? " hl" : ""}`;
         const props = {
           className: cls, style: fill ? { fill } : undefined,
@@ -89,7 +98,7 @@ function Figure({ shapes, values, max, title, hover, setHover, color }) {
  * Körperkarte vorne und hinten. values: { muscle: Zahl }. unit: Beschriftung der Zahl (z. B. "Sätze").
  * list: daneben die Regionen als Rangliste.
  */
-export default function BodyMap({ values = {}, unit = "", color = "var(--c-activity)", list = true, size = "md", detail }) {
+export default function BodyMap({ values = {}, unit = "", color = "var(--c-activity)", list = true, size = "md", detail, levels = false }) {
   const [hover, setHover] = useState(null);
   const entries = Object.entries(values).filter(([m, v]) => v > 0 && MUSCLE_LABELS[m]).sort((a, b) => b[1] - a[1]);
   const max = entries.length ? entries[0][1] : 0;
@@ -97,8 +106,8 @@ export default function BodyMap({ values = {}, unit = "", color = "var(--c-activ
   return (
     <div className={`body-map size-${size}${list ? " with-list" : ""}`} onMouseLeave={() => setHover(null)} style={{ "--body-accent": color }}>
       <div className="body-figs">
-        <Figure shapes={FRONT} values={values} max={max} title="Vorne" hover={hover} setHover={setHover} color={color} />
-        <Figure shapes={BACK} values={values} max={max} title="Hinten" hover={hover} setHover={setHover} color={color} />
+        <Figure shapes={FRONT} values={values} max={max} title="Vorne" hover={hover} setHover={setHover} color={color} levels={levels} />
+        <Figure shapes={BACK} values={values} max={max} title="Hinten" hover={hover} setHover={setHover} color={color} levels={levels} />
         {hover && (
           <div className="body-tip"><strong>{MUSCLE_LABELS[hover]}</strong>
             <span>{hv ? `${fmtNum(hv, hv % 1 ? 1 : 0)} ${unit}` : "nicht trainiert"}</span>
@@ -111,15 +120,26 @@ export default function BodyMap({ values = {}, unit = "", color = "var(--c-activ
           {entries.slice(0, 10).map(([m, v]) => (
             <li key={m} className={hover === m ? "hl" : ""} onMouseEnter={() => setHover(m)}>
               <span>{MUSCLE_LABELS[m]}</span>
-              <span className="body-bar"><i style={{ width: `${(v / max) * 100}%` }} /></span>
+              <span className="body-bar"><i style={{ width: `${(v / max) * 100}%`, ...(levels ? { background: levelOf(v / max).color } : {}) }} /></span>
               <span className="num">{fmtNum(v, v % 1 && v < 10 ? 1 : 0)}</span>
             </li>
           ))}
           {!entries.length && <li className="muted small">Im Zeitraum nichts trainiert.</li>}
         </ol>
       )}
+      {levels && (
+        <div className="body-legend">
+          <span><i style={{ background: "var(--body-none)" }} />gar nicht</span>
+          {LEVELS.map((l) => <span key={l.label}><i style={{ background: l.color }} />{l.label}</span>)}
+          {untrained(values).length > 0 && <span className="tiny muted">Nicht trainiert: {untrained(values).join(", ")}</span>}
+        </div>
+      )}
     </div>
   );
+}
+
+function untrained(values) {
+  return Object.keys(MUSCLE_LABELS).filter((m) => !(values[m] > 0)).map((m) => MUSCLE_LABELS[m]);
 }
 
 /** Werte aus Übungsblöcken eines Trainings: Arbeitssätze, Nebenmuskeln halb. */
