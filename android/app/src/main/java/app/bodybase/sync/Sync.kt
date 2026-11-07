@@ -100,13 +100,14 @@ class Api(base: String, private val key: String) {
         return if (!account.isNullOrBlank()) "Verbunden mit dem Konto $account" else "Verbindung steht"
     }
 
-    fun send(kind: String, items: List<JSONObject>) {
+    fun send(kind: String, items: List<JSONObject>, aggregated: Boolean = false) {
         val body = JSONObject()
             .put("timestamp", Instant.now().toString())
             .put("app_version", BuildConfig.VERSION_NAME)
             .put("app", "BodyBase Sync")
             .put("timezone", ZoneId.systemDefault().id)
             .put(kind, JSONArray(items))
+        if (aggregated) body.put("interval_aggregated", true)
         val r = call("POST", body.toString())
         if (r.code !in 200..299) throw problem(r)
     }
@@ -150,6 +151,11 @@ object Sync {
             val kinds = Kinds.ALL.filter { it.permission in granted }
             if (kinds.isEmpty()) throw SyncError("Noch kein Zugriff auf Health Connect erlaubt.", retry = false)
             val api = Api(prefs.url, prefs.key)
+            // Ab Version mit Stundensummen: Schritte & Co. einmal neu senden, damit doppelt gezählte Rohdaten ersetzt werden
+            if (!prefs.aggregatedResent) {
+                Kinds.ALL.filter { it.aggregated }.forEach { prefs.clearCursor(it.key) }
+                prefs.aggregatedResent = true
+            }
             val now = Instant.now()
             for (kind in kinds) {
                 var from = prefs.cursor(kind.key)?.minus(kind.overlap) ?: now.minus(Duration.ofDays(30))
@@ -166,7 +172,7 @@ object Sync {
                         problems += "${kind.label}: ${e.message ?: e.javaClass.simpleName}"
                         null
                     } ?: break
-                    for (part in items.chunked(CHUNK)) api.send(kind.key, part)
+                    for (part in items.chunked(CHUNK)) api.send(kind.key, part, kind.aggregated)
                     sent += items.size
                     prefs.setCursor(kind.key, to)
                     from = to

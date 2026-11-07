@@ -70,3 +70,34 @@ def test_bodybase_sync_app_format(client, auth):
     assert client.post("/api/ingest/health-connect", json=hr, headers={"X-API-Key": token}).status_code == 200
     act = next(a for a in client.get("/api/activities", headers=auth).json()["items"] if a["name"] == "Oberkörper")
     assert act["sport"] == "strength" and round(act["calories"]) == 410
+
+
+def test_sleep_night_detail_and_hourly_steps(client, auth):
+    from app.timeutil import today
+    token = client.get("/api/me/ingest", headers=auth).json()["token"]
+    d = (today() - timedelta(days=1)).isoformat()
+    p = (today() - timedelta(days=2)).isoformat()
+    head = {"timestamp": f"{d}T20:00:00Z", "app_version": "1.0", "app": "BodyBase Sync"}
+    night = {**head, "sleep": [{"session_end_time": f"{d}T05:30:00Z", "start_time": f"{p}T22:00:00Z", "duration_seconds": 27000, "stages": [
+        {"stage": "light", "start_time": f"{p}T22:00:00Z", "end_time": f"{p}T23:00:00Z", "duration_seconds": 3600},
+        {"stage": "deep", "start_time": f"{p}T23:00:00Z", "end_time": f"{d}T00:30:00Z", "duration_seconds": 5400},
+        {"stage": "rem", "start_time": f"{d}T00:30:00Z", "end_time": f"{d}T01:30:00Z", "duration_seconds": 3600},
+        {"stage": "awake", "start_time": f"{d}T01:30:00Z", "end_time": f"{d}T01:45:00Z", "duration_seconds": 900},
+        {"stage": "light", "start_time": f"{d}T01:45:00Z", "end_time": f"{d}T05:30:00Z", "duration_seconds": 13500}]}]}
+    assert client.post("/api/ingest/health-connect", json=night, headers={"X-API-Key": token}).status_code == 200
+    day = client.get("/api/sleep?days=5", headers=auth).json()["nights"][-1]["day"]
+    r = client.get(f"/api/sleep/night/{day}", headers=auth)
+    assert r.status_code == 200, r.text
+    n = r.json()
+    assert n["main"]["stages"][1][2] == "deep" and n["main"]["stages"][0][0] == 0
+    assert round(n["main"]["deep_min"]) == 90 and n["need"] >= 480
+    assert client.get("/api/sleep/night/kaputt", headers=auth).status_code == 422
+
+    # Rohdaten zweier Apps (Handy + Uhr) wurden früher addiert; Stundensummen ersetzen sie im selben Zeitraum
+    raw = {**head, "steps": [{"start_time": f"{d}T08:00:00Z", "end_time": f"{d}T08:30:00Z", "count": 3000},
+                             {"start_time": f"{d}T08:05:00Z", "end_time": f"{d}T08:35:00Z", "count": 2900}]}
+    client.post("/api/ingest/health-connect", json=raw, headers={"X-API-Key": token})
+    agg = {**head, "interval_aggregated": True, "steps": [{"start_time": f"{d}T08:00:00Z", "end_time": f"{d}T09:00:00Z", "count": 3100}]}
+    client.post("/api/ingest/health-connect", json=agg, headers={"X-API-Key": token})
+    s = client.get(f"/api/metrics/steps?start={d}&end={d}", headers=auth).json()["series"]
+    assert s[0]["value"] == 3100

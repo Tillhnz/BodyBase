@@ -15,6 +15,7 @@ import Sleep from "./pages/Sleep.jsx";
 import Sources from "./pages/Sources.jsx";
 import Trends from "./pages/Trends.jsx";
 import Analysis from "./pages/Analysis.jsx";
+import SleepNight from "./pages/SleepNight.jsx";
 import Strength from "./strength/Strength.jsx";
 import Habits from "./habits/Habits.jsx";
 import ApiDocs from "./pages/ApiDocs.jsx";
@@ -84,6 +85,7 @@ export default function App() {
             <Route path="/strength/exercises" element={<ExerciseLibrary />} />
             <Route path="/strength/exercise/:id" element={<ExerciseDetail />} />
             <Route path="/sleep" element={<Sleep />} />
+            <Route path="/sleep/:day" element={<SleepNight />} />
             <Route path="/health" element={<Health />} />
             <Route path="/metric/:key" element={<MetricDetail user={user} onUser={setUser} />} />
             <Route path="/trends" element={<Trends />} />

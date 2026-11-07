@@ -26,6 +26,7 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -33,6 +34,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Duration
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.TreeMap
 import kotlin.reflect.KClass
 
@@ -46,6 +48,8 @@ class Kind(
     val group: Group,
     val type: KClass<out Record>,
     val overlap: Duration,
+    /** true: Stundensummen über Health Connect statt Rohdaten (Handy und Uhr zählen sonst doppelt) */
+    val aggregated: Boolean = false,
     val read: suspend (HealthConnectClient, Instant, Instant) -> List<JSONObject>,
 ) {
     val permission: String get() = HealthPermission.getReadPermission(type)
@@ -77,6 +81,18 @@ suspend inline fun <reified T : Record> HealthConnectClient.all(from: Instant, t
         token = res.pageToken
     } while (!token.isNullOrEmpty())
     return out
+}
+
+/**
+ * Stundensummen. Health Connect rechnet dabei Überschneidungen mehrerer Apps (Handy, Uhr, Fitness-App) nach der
+ * Prioritätenliste in Health Connect heraus – Rohdaten aller Apps einfach zu addieren würde doppelt zählen.
+ */
+suspend fun <T : Any> HealthConnectClient.hourly(metric: AggregateMetric<T>, from: Instant, to: Instant): List<Triple<Instant, Instant, T>> {
+    val start = from.truncatedTo(ChronoUnit.HOURS)
+    if (!start.isBefore(to)) return emptyList()
+    return aggregateGroupByDuration(
+        AggregateGroupByDurationRequest(setOf(metric), TimeRangeFilter.between(start, to), Duration.ofHours(1))
+    ).mapNotNull { g -> g.result[metric]?.let { Triple(g.startTime, g.endTime, it) } }
 }
 
 /** Summe/Mittel über einen Zeitraum; null, wenn kein Zugriff oder keine Daten. */
@@ -146,17 +162,17 @@ object Kinds {
     private val D2: Duration = Duration.ofDays(2)
 
     val ALL: List<Kind> = listOf(
-        Kind("steps", "Schritte", Group.ACTIVITY, StepsRecord::class, D2) { c, a, b ->
-            c.all<StepsRecord>(a, b).map { span(it.startTime, it.endTime).put("count", it.count) }
+        Kind("steps", "Schritte", Group.ACTIVITY, StepsRecord::class, D2, aggregated = true) { c, a, b ->
+            c.hourly(StepsRecord.COUNT_TOTAL, a, b).map { (s, e, v) -> span(s, e).put("count", v) }
         },
-        Kind("distance", "Strecke", Group.ACTIVITY, DistanceRecord::class, D2) { c, a, b ->
-            c.all<DistanceRecord>(a, b).map { span(it.startTime, it.endTime).put("meters", it.distance.inMeters) }
+        Kind("distance", "Strecke", Group.ACTIVITY, DistanceRecord::class, D2, aggregated = true) { c, a, b ->
+            c.hourly(DistanceRecord.DISTANCE_TOTAL, a, b).map { (s, e, v) -> span(s, e).put("meters", v.inMeters) }
         },
-        Kind("active_calories", "Aktive Kalorien", Group.ACTIVITY, ActiveCaloriesBurnedRecord::class, D2) { c, a, b ->
-            c.all<ActiveCaloriesBurnedRecord>(a, b).map { span(it.startTime, it.endTime).put("calories", it.energy.inKilocalories) }
+        Kind("active_calories", "Aktive Kalorien", Group.ACTIVITY, ActiveCaloriesBurnedRecord::class, D2, aggregated = true) { c, a, b ->
+            c.hourly(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL, a, b).map { (s, e, v) -> span(s, e).put("calories", v.inKilocalories) }
         },
-        Kind("total_calories", "Kalorien gesamt", Group.ACTIVITY, TotalCaloriesBurnedRecord::class, D2) { c, a, b ->
-            c.all<TotalCaloriesBurnedRecord>(a, b).map { span(it.startTime, it.endTime).put("calories", it.energy.inKilocalories) }
+        Kind("total_calories", "Kalorien gesamt", Group.ACTIVITY, TotalCaloriesBurnedRecord::class, D2, aggregated = true) { c, a, b ->
+            c.hourly(TotalCaloriesBurnedRecord.ENERGY_TOTAL, a, b).map { (s, e, v) -> span(s, e).put("calories", v.inKilocalories) }
         },
         Kind("exercise", "Trainings", Group.ACTIVITY, ExerciseSessionRecord::class, D2) { c, a, b ->
             c.all<ExerciseSessionRecord>(a, b).map { r ->
@@ -246,8 +262,8 @@ object Kinds {
                     .maybe("caffeine_grams", it.caffeine?.inGrams)
             }
         },
-        Kind("hydration", "Trinken", Group.NUTRITION, HydrationRecord::class, D2) { c, a, b ->
-            c.all<HydrationRecord>(a, b).map { span(it.startTime, it.endTime).put("liters", it.volume.inLiters) }
+        Kind("hydration", "Trinken", Group.NUTRITION, HydrationRecord::class, D2, aggregated = true) { c, a, b ->
+            c.hourly(HydrationRecord.VOLUME_TOTAL, a, b).map { (s, e, v) -> span(s, e).put("liters", v.inLiters) }
         },
     )
 

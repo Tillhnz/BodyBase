@@ -88,6 +88,7 @@ class SleepIn:
     avg_hr: float | None = None
     hrv: float | None = None
     nap: bool = False
+    stages: list | None = None  # [[Start, Ende, "deep|rem|light|awake"]] als datetime (UTC)
 
 
 def _num(v) -> float | None:
@@ -227,6 +228,9 @@ class Writer:
         for attr in ("deep_min", "rem_min", "light_min", "awake_min", "score", "efficiency", "avg_hr", "hrv"):
             setattr(row, attr, _num(getattr(s, attr)))
         row.nap = bool(s.nap)
+        if s.stages:
+            row.stages = [[round((a - row.start).total_seconds() / 60, 1), round((b - row.start).total_seconds() / 60, 1), k]
+                          for a, b, k in s.stages if a and b and b > a]
         self.db.commit()
         self.counts["sleep"] += 1
         if not s.nap:

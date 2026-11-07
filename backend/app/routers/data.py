@@ -490,6 +490,75 @@ def sleep(days: int = Query(30, ge=1, le=3650), user: User = Depends(current_use
     }
 
 
+@router.get("/sleep/night/{day}")
+def sleep_night(day: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Eine Nacht im Detail: alle Quellen, Phasenverlauf, Puls, Schlafwert mit Aufschlüsselung, Umfeld (Vortag, Morgen)."""
+    from .. import heartrate, scores
+    from ..report import Days
+    try:
+        d = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(422, "Ungültiges Datum")
+    rows = db.scalars(select(SleepSession).where(SleepSession.user_id == user.id, SleepSession.day == d)
+                      .order_by(SleepSession.start)).all()
+    best = {r["source"]: r for r in best_sleep(db, user, d, d)}
+    chosen = next(iter(best.values()), None)
+    sessions = []
+    for r in rows:
+        sessions.append({
+            "id": r.id, "source": r.source, "source_name": providers.name_of(r.source), "nap": bool(r.nap),
+            "start": r.start.isoformat() + "Z", "end": r.end.isoformat() + "Z", "in_bed_min": round((r.end - r.start).total_seconds() / 60),
+            "asleep_min": r.asleep_min, "deep_min": r.deep_min, "rem_min": r.rem_min, "light_min": r.light_min, "awake_min": r.awake_min,
+            "score": r.score, "efficiency": r.efficiency, "avg_hr": r.avg_hr, "hrv": r.hrv, "stages": r.stages,
+            "chosen": bool(chosen and not r.nap and r.source == chosen["source"] and r.start.isoformat() + "Z" == chosen["start"]),
+        })
+    main = next((x for x in sessions if x["chosen"]), None) or next((x for x in sessions if not x["nap"]), None)
+    days = Days(db, user, d - timedelta(days=14), d)
+    info = days.day(d)
+    sleep_score = days.ctx.sleep(d)
+    readiness = days.ctx.readiness(d)
+    hr = None
+    if main:
+        st = datetime.fromisoformat(main["start"][:-1])
+        en = datetime.fromisoformat(main["end"][:-1])
+        hr = heartrate.series_for(db, user.id, st, en)
+        if hr:
+            hr["start"] = main["start"]
+    # Umfeld: Vortag (Belastung, spätes Training), Durchschnitt der 7 Nächte davor
+    prev_day = d - timedelta(days=1)
+    late = []
+    for a in days.ctx.acts.get(prev_day, []):
+        end = a.start + timedelta(seconds=a.duration_s or a.moving_s or 0)
+        local = end.replace(tzinfo=timezone.utc).astimezone(tz())
+        if local.hour >= 19:
+            late.append({"name": a.name or a.sport, "end": local.strftime("%H:%M")})
+    week = [days.day(d - timedelta(days=i)) for i in range(1, 8)]
+
+    def avg(k):
+        v = [x[k] for x in week if x[k] is not None]
+        return round(sum(v) / len(v), 1) if v else None
+    metrics = {}
+    for key in ("respiratory_rate", "spo2", "skin_temp_dev", "resting_hr", "hrv"):
+        ser = daily_series(db, user, key, d - timedelta(days=30), d)
+        cur = next((p["value"] for p in ser if p["day"] == d.isoformat()), None)
+        base = [p["value"] for p in ser if p["day"] != d.isoformat()]
+        if cur is not None:
+            metrics[key] = {"value": cur, "avg30": sum(base) / len(base) if base else None, "label": M.METRICS[key].label,
+                            "unit": M.METRICS[key].unit}
+    nights = [r["day"] for r in best_sleep(db, user, d - timedelta(days=60), d + timedelta(days=60))]
+    earlier = [x for x in nights if x < d.isoformat()]
+    later = [x for x in nights if x > d.isoformat()]
+    return {
+        "day": d.isoformat(), "sessions": sessions, "main": main, "hr": hr,
+        "score": sleep_score, "need": info["need"], "readiness": readiness,
+        "debt": round(info["need"] - main["asleep_min"]) if main and main["asleep_min"] else None,
+        "prev_load": days.ctx.load(prev_day)["value"], "late_training": late,
+        "week_avg": {"asleep": avg("asleep"), "sleep": avg("sleep"), "deep": avg("deep"), "rem": avg("rem")},
+        "metrics": metrics,
+        "prev": earlier[-1] if earlier else None, "next": later[0] if later else None,
+    }
+
+
 # ---------- Vergleich zweier Messgrößen ----------
 
 @router.get("/compare")

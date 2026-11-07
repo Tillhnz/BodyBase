@@ -65,6 +65,14 @@ class Prefs(ctx: Context) {
         sp.edit().putLong("c_$kind", t.toEpochMilli()).commit()
     }
 
+    fun clearCursor(kind: String) {
+        sp.edit().remove("c_$kind").commit()
+    }
+
+    var aggregatedResent: Boolean
+        get() = sp.getBoolean("aggregated_resent", false)
+        set(v) = sp.edit().putBoolean("aggregated_resent", v).apply()
+
     /** start = null: wieder wie beim ersten Mal (30 Tage); sonst ab diesem Zeitpunkt alles neu senden. */
     fun resetCursors(start: Instant?) {
         val e = sp.edit()

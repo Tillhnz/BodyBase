@@ -169,6 +169,7 @@ class SleepSession(Base):
     avg_hr: Mapped[float | None] = mapped_column(Float, nullable=True)
     hrv: Mapped[float | None] = mapped_column(Float, nullable=True)
     nap: Mapped[bool | None] = mapped_column(Boolean, default=False, nullable=True)
+    stages: Mapped[list | None] = mapped_column(JSON, nullable=True)  # Phasenverlauf [[Start-Minute, Ende-Minute, "deep"], …]
 
 
 class ImportJob(Base):

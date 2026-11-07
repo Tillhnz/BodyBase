@@ -91,7 +91,20 @@ def ingest(w: Writer, payload: dict) -> dict:
                 w.sample(metric, ts, v * factor)
                 rec()
     for key, (metric, field, factor) in INTERVAL.items():
-        for item in payload.get(key) or []:
+        items = payload.get(key) or []
+        if items and payload.get("interval_aggregated"):
+            # Die App schickt Stundensummen, in denen Health Connect doppelte Quellen (Handy + Uhr) schon bereinigt hat.
+            # Ältere Rohdaten im selben Zeitraum würden sonst doppelt zählen: vorher entfernen.
+            starts = [t for t in (parse_iso(i.get("start_time")) for i in items) if t]
+            ends = [t for t in (parse_iso(i.get("end_time")) for i in items) if t]
+            if starts:
+                from sqlalchemy import delete
+
+                from ..models import Sample
+                w.flush_samples()
+                w.db.execute(delete(Sample).where(Sample.user_id == w.user_id, Sample.source == w.source, Sample.metric == metric,
+                                                  Sample.ts >= min(starts), Sample.ts < max(ends or starts)))
+        for item in items:
             v, ts = _num(item.get(field)), parse_iso(item.get("start_time"))
             if v is not None and ts is not None:
                 w.sample(metric, ts, v * factor)
@@ -120,18 +133,22 @@ def ingest(w: Writer, payload: dict) -> dict:
         start = end - timedelta(seconds=dur)
         mins = {"deep": 0.0, "rem": 0.0, "light": 0.0, "awake": 0.0}
         stages = item.get("stages") or []
+        timeline = []
         for st in stages:
             kind = _stage(st.get("stage"))
+            a, b = parse_iso(st.get("start_time")), parse_iso(st.get("end_time"))
             sec = _num(st.get("duration_seconds"))
             if sec is None:
-                a, b = parse_iso(st.get("start_time")), parse_iso(st.get("end_time"))
                 sec = (b - a).total_seconds() if a and b else 0
+            if kind and a and b:
+                timeline.append((a, b, kind))
             if kind:
                 mins[kind] += sec / 60
         asleep = mins["deep"] + mins["rem"] + mins["light"] if stages else dur / 60
         w.sleep(SleepIn(source_id=f"hc-{end.isoformat()}", start=start, end=end, asleep_min=asleep or None,
                         deep_min=mins["deep"] or None, rem_min=mins["rem"] or None, light_min=mins["light"] or None,
-                        awake_min=mins["awake"] or None, nap=dur < 3 * 3600 and 9 <= end.hour <= 20))
+                        awake_min=mins["awake"] or None, nap=dur < 3 * 3600 and 9 <= end.hour <= 20,
+                        stages=sorted(timeline) or None))
         rec()
     for item in payload.get("exercise") or []:
         start, end = parse_iso(item.get("start_time")), parse_iso(item.get("end_time"))

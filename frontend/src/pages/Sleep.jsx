@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useDataVersion } from "../refresh.js";
 import { StageBar, useWidth } from "../components/charts.jsx";
@@ -13,6 +13,7 @@ const RANGES = [{ value: 14, label: "14 Nächte" }, { value: 30, label: "30 Näc
 function SleepBars({ nights, goal }) {
   const [ref, width] = useWidth();
   const [hover, setHover] = useState(null);
+  const navigate = useNavigate();
   const h = 240, pad = { l: 40, r: 8, t: 10, b: 24 };
   const max = Math.max(goal || 0, ...nights.map((n) => (n.asleep_min || 0) + (n.awake_min || 0)), 60);
   const hi = Math.ceil(max / 60) * 60;
@@ -38,7 +39,7 @@ function SleepBars({ nights, goal }) {
             : [["st-light", nt.asleep_min], ["st-awake", nt.awake_min]];
           let acc = 0;
           return (
-            <g key={nt.day} onMouseEnter={() => setHover({ nt, x: x + bw / 2 })}>
+            <g key={nt.day} onMouseEnter={() => setHover({ nt, x: x + bw / 2 })} onClick={() => nt.start && navigate(`/sleep/${nt.day}`)} style={{ cursor: nt.start ? "pointer" : undefined }}>
               <rect x={pad.l + i * slot} y={pad.t} width={slot} height={bh} fill="transparent" />
               {parts.map(([cls, v]) => {
                 if (!v) return null;
@@ -101,13 +102,13 @@ export default function Sleep() {
           <section className="panel">
             <div className="panel-head"><h2>Letzte Nächte</h2></div>
             <ul className="list">
-              {[...nights].reverse().slice(0, 10).map((n) => (
-                <li key={n.day} style={{ display: "grid", gridTemplateColumns: "minmax(110px, 160px) minmax(0, 1fr) auto", gap: "1rem", alignItems: "center", padding: "0.65rem 0" }}>
+              {[...nights].reverse().slice(0, 14).map((n) => (
+                <li key={n.day}><Link to={`/sleep/${n.day}`} className="night-row" style={{ display: "grid", gridTemplateColumns: "minmax(110px, 160px) minmax(0, 1fr) auto", gap: "1rem", alignItems: "center", padding: "0.65rem 0" }}>
                   <div><strong>{fmtDay(n.day)}</strong><div className="tiny muted">{n.start ? `${fmtTime(n.start)} – ${fmtTime(n.end)}` : n.source_name}</div></div>
                   {n.deep_min != null ? <StageBar deep={n.deep_min} rem={n.rem_min} light={n.light_min} awake={n.awake_min} /> : <span className="muted small">ohne Phasen</span>}
                   <div style={{ textAlign: "right" }}><strong style={{ fontFamily: "var(--font-display)", fontSize: "1.2rem" }}>{fmtMinutes(n.asleep_min)}</strong>
                     {n.score != null && <div className="tiny muted">Wert {fmtNum(n.score)}</div>}</div>
-                </li>
+                </Link></li>
               ))}
             </ul>
           </section>
