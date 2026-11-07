@@ -247,8 +247,8 @@ export function Calendar({ data, end, days = 365 }) {
     cells.push({ iso, m, lvl, col: Math.floor(idx / 7), row: idx % 7, month: d.getDate() === 1 ? d : null });
   }
   const cols = Math.max(...cells.map((c) => c.col)) + 1;
-  // Kästchen passend zur Breite: kurze Zeiträume größer (höchstens 26 px), ein Jahr auf dem Handy zum Wischen (mindestens 9 px)
-  const s = Math.max(9, Math.min(26, (width - 30) / cols * 0.8));
+  // Kästchen passend zur Breite: kurze Zeiträume größer (höchstens 18 px), ein Jahr auf dem Handy zum Wischen (mindestens 9 px)
+  const s = Math.max(9, Math.min(18, (width - 30) / cols * 0.8));
   const g = Math.max(2, s * 0.22);
   const w = cols * (s + g) + 30;
   useLayoutEffect(() => {  // neueste Woche sichtbar, wenn gewischt werden muss
