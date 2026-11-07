@@ -312,7 +312,7 @@ def test_exercise_media(client, auth):
     assert len(idx) > 800
     assert all(v in idx for v in strength_media.OVERRIDES.values() if v)
     with_media = [c for c in CATALOG if strength_media.media_for_catalog(c["key"], [*c["aliases"], c["name"]], c["equipment"])]
-    assert len(with_media) >= len(CATALOG) - 3
+    assert len(with_media) >= len(CATALOG) - 5  # Burpee, Bouldern, Klettern, Hangboard: eigene Darstellung
     items = client.get("/api/strength/exercises", headers=auth).json()
     bench = next(e for e in items if e["name"] == "Bankdrücken (Langhantel)")
     assert bench["media"] == "Barbell_Bench_Press_-_Medium_Grip"
