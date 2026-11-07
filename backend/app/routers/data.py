@@ -493,7 +493,7 @@ def sleep(days: int = Query(30, ge=1, le=3650), user: User = Depends(current_use
 @router.get("/sleep/night/{day}")
 def sleep_night(day: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Eine Nacht im Detail: alle Quellen, Phasenverlauf, Puls, Schlafwert mit Aufschlüsselung, Umfeld (Vortag, Morgen)."""
-    from .. import heartrate, scores
+    from .. import heartrate
     from ..report import Days
     try:
         d = date.fromisoformat(day)
