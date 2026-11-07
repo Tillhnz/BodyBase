@@ -232,6 +232,7 @@ export function Sparkline({ data, height = 42 }) {
 
 /** Jahreskalender: ein Kästchen pro Tag, Farbe nach Trainingsminuten. */
 export function Calendar({ data, end, days = 365 }) {
+  const [ref, width] = useWidth(700);
   const map = new Map((data || []).map((d) => [d.day, d.minutes]));
   const last = parseDay(end);
   const start = new Date(last.getTime() - (days - 1) * dayMs);
@@ -246,16 +247,22 @@ export function Calendar({ data, end, days = 365 }) {
     cells.push({ iso, m, lvl, col: Math.floor(idx / 7), row: idx % 7, month: d.getDate() === 1 ? d : null });
   }
   const cols = Math.max(...cells.map((c) => c.col)) + 1;
-  const s = 10, g = 2.5;
+  // Kästchen passend zur Breite: kurze Zeiträume größer (höchstens 26 px), ein Jahr auf dem Handy zum Wischen (mindestens 9 px)
+  const s = Math.max(9, Math.min(26, (width - 30) / cols * 0.8));
+  const g = Math.max(2, s * 0.22);
+  const w = cols * (s + g) + 30;
+  useLayoutEffect(() => {  // neueste Woche sichtbar, wenn gewischt werden muss
+    if (ref.current) ref.current.scrollLeft = ref.current.scrollWidth;
+  }, [w, ref]);
   return (
-    <div className="calendar">
-      <svg viewBox={`0 0 ${cols * (s + g) + 30} ${7 * (s + g) + 18}`} width={cols * (s + g) + 30} height={7 * (s + g) + 18}
+    <div className="calendar" ref={ref}>
+      <svg viewBox={`0 0 ${w} ${7 * (s + g) + 18}`} width={w} height={7 * (s + g) + 18}
         role="img" aria-label="Trainingskalender">
-        {["Mo", "Mi", "Fr"].map((t, i) => <text key={t} className="chart-axis" x={0} y={18 + (i * 2) * (s + g) + s - 2}>{t}</text>)}
+        {["Mo", "Mi", "Fr"].map((t, i) => <text key={t} className="chart-axis" x={0} y={16 + (i * 2) * (s + g) + s * 0.75}>{t}</text>)}
         {cells.map((c) => (
           <g key={c.iso}>
             {c.month && <text className="chart-axis" x={26 + c.col * (s + g)} y={10}>{monthFmt.format(c.month)}</text>}
-            <rect className={`cal-${c.lvl}`} x={26 + c.col * (s + g)} y={16 + c.row * (s + g)} width={s} height={s} rx={3}>
+            <rect className={`cal-${c.lvl}`} x={26 + c.col * (s + g)} y={16 + c.row * (s + g)} width={s} height={s} rx={Math.min(4, s / 3)}>
               <title>{`${fmtDay(c.iso)}: ${c.m ? `${c.m} min` : "kein Training"}`}</title>
             </rect>
           </g>
@@ -289,8 +296,9 @@ export function LoadChart({ data, height = 220 }) {
         <path d={formArea} fill="var(--c-recovery)" opacity="0.14" />
         <path d={line("fitness")} className="chart-line draw" pathLength="1" style={{ "--c": "var(--c-activity)" }} />
         <path d={line("fatigue")} className="chart-line thin" style={{ "--c": "var(--c-heart)", opacity: 0.85 }} />
-        {data.filter((_, i) => i % 30 === 0).map((d) => {
-          const i = data.indexOf(d);
+        {data.map((d, i) => {
+          const every = Math.max(1, Math.ceil(data.length / Math.max(2, Math.floor(w / 80))));
+          if (i % every !== 0 || x(i) > width - pad.r - 20) return null;
           return <text key={d.day} className="chart-axis" x={x(i)} y={height - 6} textAnchor="middle">{fmtDayShort(d.day)}</text>;
         })}
       </svg>

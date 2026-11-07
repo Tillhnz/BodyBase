@@ -324,7 +324,7 @@ a.metric-card:hover { border-color: color-mix(in srgb, var(--c, var(--iris)) 60%
 .stage-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 0.35rem; vertical-align: -1px; }
 
 .calendar { overflow-x: auto; padding-bottom: 0.3rem; }
-.calendar svg { display: block; max-width: 100%; height: auto; }
+.calendar svg { display: block; }
 .cal-0 { fill: var(--ink-2); }
 .cal-1 { fill: color-mix(in srgb, var(--c-activity) 25%, var(--ink-2)); }
 .cal-2 { fill: color-mix(in srgb, var(--c-activity) 50%, var(--ink-2)); }
