@@ -722,11 +722,18 @@ def body_load(db: Session, user_id: int, days: int, today_: date) -> dict:
     wids = [w.id for w in db.scalars(select(Workout).where(Workout.user_id == user_id, Workout.day >= start))]
     sets_total = 0
     if wids:
+        from .sports import normalize
         for s in db.scalars(select(WorkoutSet).where(WorkoutSet.workout_id.in_(wids), WorkoutSet.type != "warmup")):
             e = exs.get(s.exercise_id)
             if not e or e.primary == "cardio":
                 continue
             sets_total += 1
+            # Übungen auf Zeit, die eigentlich eine Sportart sind (Bouldern 90 min, Klettern …): nach Minuten wie die Sportart
+            sport = normalize(e.name) if e.kind == "duration" and s.duration_s else None
+            if sport in ("climb", "swim", "row", "ride", "run", "ski") and SPORT_MUSCLES.get(sport):
+                for m, w in SPORT_MUSCLES[sport].items():
+                    strength[m] += s.duration_s / 600 * w
+                continue
             if e.primary == "full_body":
                 for m, w in FULL_BODY.items():
                     strength[m] += w

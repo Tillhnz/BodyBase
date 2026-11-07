@@ -326,3 +326,11 @@ def test_exercise_media(client, auth):
     assert custom["media"] == "Wide-Grip_Lat_Pulldown"
     r = client.put(f"/api/strength/exercises/{custom['id']}", json={**custom, "media": "gibt-es-nicht"}, headers=auth)
     assert r.status_code == 422
+
+
+def test_climbing_muscles():
+    from app.strength_catalog import guess_muscles
+    assert guess_muscles("Bouldern")[0] == "forearms"
+    assert "lats" in guess_muscles("Indoor Climbing")[1]
+    assert guess_muscles("Mountain Climber")[0] == "abs"
+    assert guess_muscles("Stair Climber")[0] == "cardio"

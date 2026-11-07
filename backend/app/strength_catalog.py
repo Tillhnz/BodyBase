@@ -146,6 +146,11 @@ _C = [
     ("bike_erg", "Ergometer (Rad)", "machine", "cardio", ["quads"], "distance", ["Cycling", "Stationary Bike", "Spinning"]),
     ("elliptical", "Crosstrainer", "machine", "cardio", [], "distance", ["Elliptical Trainer"]),
     ("stair_climber", "Stepper", "machine", "cardio", ["glutes", "calves"], "duration", ["Stair Machine", "Stair Climber"]),
+    ("bouldering", "Bouldern", "other", "forearms", ["lats", "biceps", "upper_back", "shoulders", "abs"], "duration",
+     ["Bouldering", "Boulder", "Climbing (Bouldering)"]),
+    ("rope_climbing", "Klettern (Seil)", "other", "forearms", ["lats", "biceps", "upper_back", "shoulders", "abs", "calves"], "duration",
+     ["Rock Climbing", "Climbing", "Indoor Climbing", "Klettern"]),
+    ("hangboard", "Hangboard", "other", "forearms", ["lats", "biceps"], "duration", ["Fingerboard", "Hangboard Hang", "Dead Hang"]),
 ]
 
 CATALOG = [
@@ -190,6 +195,9 @@ GUESS_RULES: list[tuple[tuple[str, ...], str, list[str]]] = [
       "knee raise", "beinheben", "knieheben", "bauchpresse", "klappmesser", "seitbeug", "captain", "russian twist", "wood chop", "hollow", "v up", "v-up", "oblique", "dead bug", "mountain climber",
       "toes to bar", "l-sit", "l sit", "pallof", "flutter", "bicycle", "side bend", "seitstütz", "core"), "abs", []),
     (("neck", "nacken", "hals"), "neck", []),
+    # Klettern zuletzt: „stair climber“ und „mountain climber“ sind oben schon vergeben
+    (("boulder", "kletter", "climb", "hangboard", "fingerboard", "campus", "dead hang"), "forearms",
+     ["lats", "biceps", "upper_back", "shoulders", "abs"]),
 ]
 
 
