@@ -1143,3 +1143,12 @@ details > summary { list-style-position: inside; }
 .hypno { width: 100%; overflow: hidden; margin-bottom: 0.6rem; }
 .sleep-night tr.chosen td { color: var(--chalk); font-weight: 600; }
 @media (max-width: 800px) { .night-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Nie seitlich wischen müssen: was breiter wäre als der Bildschirm (Diagramme vor dem Messen, lange Wörter), wird abgeschnitten
+   bzw. scrollt in seinem eigenen Kasten. „clip“ statt „hidden“, damit position: sticky weiter funktioniert. */
+html, body { overflow-x: clip; max-width: 100%; }
+.main, .page { min-width: 0; max-width: 100%; }
+.grid-2 > *, .kpis > *, .panel, .act-main, .hbar-label { min-width: 0; }
+.panel svg { max-width: 100%; }
+.panel .calendar svg, .panel .table-wrap svg { max-width: none; }
+.act-main strong, .act-main span { overflow-wrap: anywhere; }
