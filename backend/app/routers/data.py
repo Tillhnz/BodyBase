@@ -328,6 +328,11 @@ def get_activity(activity_id: int, user: User = Depends(current_user), db: Sessi
         out["polyline"] = next((x.polyline for x in group if x.polyline), None)
     if not out.get("details"):
         out["details"] = next((x.details for x in group if x.details), None)
+    # beanspruchte Muskeln: bei Sportarten nach Dauer (wie auf der Körperkarte der Startseite, 10 Minuten = 1 Punkt)
+    from ..strength_catalog import SPORT_MUSCLES
+    weights = SPORT_MUSCLES.get(primary.sport or "")
+    minutes = (primary.duration_s or primary.moving_s or 0) / 60
+    out["muscles"] = {m: round(minutes / 10 * w, 1) for m, w in (weights or {}).items()} if weights and minutes else {}
     return out
 
 

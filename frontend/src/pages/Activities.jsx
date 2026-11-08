@@ -5,6 +5,7 @@ import { useDataVersion } from "../refresh.js";
 import { Calendar, LoadChart, decodePolyline, useWidth } from "../components/charts.jsx";
 import RouteMap from "../components/RouteMap.jsx";
 import Linked from "../components/Linked.jsx";
+import BodyMap from "../components/BodyMap.jsx";
 import { Loading, confirmDialog, toast } from "../components/feedback.jsx";
 import { EmptyState, Kpi, Segmented, SportIcon, useAsync } from "../components/ui.jsx";
 import { fmtDuration, fmtKm, fmtNum, fmtTime, todayIso } from "../fmt.js";
@@ -258,6 +259,12 @@ export function ActivityDetail() {
             {prof.p && <Profile x={prof.d} y={prof.p} label="Leistung" unit="W" colorVar="var(--c-metabolic)" hover={hover} onHover={setHover} />}
           </section>
         ) : null}
+        {!exercises?.length && a.muscles && Object.keys(a.muscles).length > 0 && (
+          <section className="panel">
+            <div className="panel-head"><h2>Beanspruchte Muskeln</h2><span className="tiny muted">nach Sportart und Dauer, 10 Minuten = 1 Punkt</span></div>
+            <BodyMap values={a.muscles} unit="Punkte" levels />
+          </section>
+        )}
         {exercises?.length ? (
           <section className="panel">
             <div className="panel-head"><h2>Übungen</h2></div>
