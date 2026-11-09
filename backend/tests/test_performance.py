@@ -3,27 +3,20 @@ from datetime import datetime, timedelta
 from conftest import register
 
 
-def _ride(client, headers, token, start, minutes, watts, name):
-    payload = {"timestamp": start.isoformat() + "Z", "app_version": "1", "exercise": [{
-        "type": "biking", "title": name, "start_time": start.isoformat() + "Z",
-        "end_time": (start + timedelta(minutes=minutes)).isoformat() + "Z", "duration_seconds": minutes * 60}]}
-    assert client.post("/api/ingest/health-connect", json=payload, headers={"X-API-Key": token}).status_code == 200
-
-
 def test_ftp_vo2_and_notices(client):
     headers, _ = register(client)
     # erster Aufruf: nichts Altes hochspülen
     first = client.get("/api/notices", headers=headers).json()
     assert first["activities"] == [] and first["ftp"] is None
-    token = client.get("/api/me/ingest", headers=headers).json()["token"]
-    now = datetime.utcnow().replace(microsecond=0) - timedelta(hours=3)
-    _ride(client, headers, token, now, 45, 220, "Feierabendrunde")
+    me = client.get("/api/me", headers=headers).json()
     from app.database import SessionLocal
-    from app.models import Activity
-    with SessionLocal() as db:  # Wattmesser-Daten wie aus einer FIT-Datei
-        a = db.query(Activity).filter(Activity.name == "Feierabendrunde").first()
-        a.details = {"pc": {"300": 300, "1200": 250, "60": 400}}
-        db.commit()
+    from app.store import ActivityIn, Writer
+    now = datetime.utcnow().replace(microsecond=0) - timedelta(hours=3)
+    with SessionLocal() as db:  # Fahrt mit Wattmesser-Daten wie aus einer FIT-Datei
+        w = Writer(db, me["id"], "files")
+        w.activity(ActivityIn(source_id="r1", start=now, sport_raw="Ride", name="Feierabendrunde", duration_s=2700,
+                              avg_power=220, details={"pc": {"300": 300, "1200": 250, "60": 400}}))
+        w.flush()
     client.post("/api/entries", headers=headers, json={"metric": "weight", "value": 75})
     perf = client.get("/api/performance", headers=headers).json()
     assert perf["ftp"] == 238 and perf["vo2max"] > 45
