@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     data_dir: str = "/data"
     map_tile_url: str = ""  # eigene Kachel-URL mit {z}/{x}/{y}, leer = OpenStreetMap
     carto_api_key: str = ""  # optional: dunkle CARTO-Karte
+    ntfy_url: str = "https://ntfy.sh"  # Push über die App ntfy
+    ntfy_topic: str = ""  # leer = keine Push-Nachrichten
+    update_notify: bool = True  # neue Versionen per Push melden
 
 
 settings = Settings()

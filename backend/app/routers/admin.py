@@ -168,6 +168,18 @@ class OptionsIn(BaseModel):
     values: dict
 
 
+@router.post("/settings/test-push")
+def test_push(admin: User = Depends(require_admin)):
+    from .. import updatewatch
+    if not settings.ntfy_topic:
+        raise HTTPException(409, "Bitte zuerst ein ntfy-Thema eintragen und speichern.")
+    try:
+        updatewatch.push("BodyBase: Test", "Wenn du das liest, kommen Update-Meldungen auf dein Handy.")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"ntfy: {e}")
+    return {"ok": True}
+
+
 @router.put("/settings")
 def put_options(data: OptionsIn, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     try:

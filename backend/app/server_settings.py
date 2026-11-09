@@ -23,6 +23,9 @@ OPTIONS = {
     "sync_interval_minutes": ("int", (15, 1440)),
     "backfill_days": ("int", (7, 3650)),
     "timezone": ("str", 60),
+    "ntfy_url": ("str", 300),
+    "ntfy_topic": ("str", 64),
+    "update_notify": ("bool", None),
 }
 
 

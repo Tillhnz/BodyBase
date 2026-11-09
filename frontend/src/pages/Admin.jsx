@@ -256,11 +256,18 @@ function Server() {
             <span className="hint">Für die dunkle CARTO-Karte, kostenlos unter carto.com/basemaps. Ohne Schlüssel kommt OpenStreetMap (im dunklen Design abgedunkelt).</span></label>
           <label>Karten: eigene Kachel-Adresse (optional)<input value={v.map_tile_url || ""} onChange={(e) => setV({ ...v, map_tile_url: e.target.value })} placeholder="https://…/{z}/{x}/{y}.png" />
             <span className="hint">Hat Vorrang vor CARTO und OpenStreetMap. Muss mit https:// beginnen und {"{z}"}, {"{x}"}, {"{y}"} enthalten.</span></label>
+          <label>Push: ntfy-Thema<input value={v.ntfy_topic || ""} onChange={(e) => setV({ ...v, ntfy_topic: e.target.value })} placeholder="z. B. bb-till-7k3q9x" />
+            <span className="hint">In der App ntfy dieses Thema abonnieren. Ein langer, schwer zu erratender Name. Leer = keine Push-Nachrichten.</span></label>
+          <label>Push: ntfy-Server<input value={v.ntfy_url || ""} onChange={(e) => setV({ ...v, ntfy_url: e.target.value })} placeholder="https://ntfy.sh" /></label>
           <label>In andere Seiten einbetten<input value={v.frame_ancestors} onChange={(e) => setV({ ...v, frame_ancestors: e.target.value })} placeholder="https://ha.example.de" />
             <span className="hint">Adressen, die BodyBase einbetten dürfen (z. B. Home Assistant), mit Leerzeichen getrennt.</span></label>
         </div>
       </div>
-      <div className="actions"><button className="btn primary">Speichern</button></div>
+      <div className="stack">
+        <Switch checked={v.update_notify} onChange={(x) => setV({ ...v, update_notify: x })}>Neue BodyBase-Versionen per Push melden (prüft alle 6 Stunden, Sicherheitsupdates mit hoher Priorität)</Switch>
+      </div>
+      <div className="actions"><button className="btn primary">Speichern</button>
+        <button type="button" className="btn" onClick={() => api.post("/admin/settings/test-push", {}).then(() => toast("Test-Push gesendet")).catch((err) => toast(err.message, "error"))}>Test-Push</button></div>
     </form>
   );
 }

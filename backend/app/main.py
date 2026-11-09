@@ -31,6 +31,9 @@ async def lifespan(app: FastAPI):
         sports.migrate(db)
     audit.event("System", "server.start", f"BodyBase {__version__} gestartet")
     sync.start_background()
+    from . import updatewatch
+    if settings.background_jobs:
+        updatewatch.start_background()
     yield
 
 
