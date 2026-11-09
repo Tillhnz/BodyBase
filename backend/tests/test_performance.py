@@ -26,3 +26,20 @@ def test_ftp_vo2_and_notices(client):
     client.post("/api/notices/seen", headers=headers, json={"activity_id": n["max_id"], "ftp": 238})
     again = client.get("/api/notices", headers=headers).json()
     assert again["activities"] == [] and again["ftp"] is None
+
+
+def test_performance_history(client):
+    headers, _ = register(client)
+    me = client.get("/api/me", headers=headers).json()
+    from app.database import SessionLocal
+    from app.store import ActivityIn, Writer
+    with SessionLocal() as db:
+        w = Writer(db, me["id"], "files")
+        for i, p20 in enumerate((200, 215, 230)):
+            w.activity(ActivityIn(source_id=f"h{i}", start=datetime.utcnow() - timedelta(days=200 - i * 70), sport_raw="Ride",
+                                  name=f"Fahrt {i}", duration_s=3600, details={"pc": {"1200": p20}}))
+        w.flush()
+    r = client.post("/api/performance/recompute", headers=headers).json()
+    assert r["weeks"] >= 3
+    series = client.get("/api/metrics/ftp?days=400", headers=headers).json()["series"]
+    assert len(series) >= 3 and max(p["value"] for p in series) == 218

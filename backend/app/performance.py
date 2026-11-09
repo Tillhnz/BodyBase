@@ -26,15 +26,18 @@ WINDOW_DAYS = 90
 FTP_CHANGE_W = 3  # ab so vielen Watt Unterschied gibt es einen Hinweis
 
 
-def _weight(db: Session, user: User) -> float | None:
-    s = daily_series(db, user, "weight", today() - timedelta(days=120), today())
+def _weight(db: Session, user: User, end=None) -> float | None:
+    end = end or today()
+    s = daily_series(db, user, "weight", end - timedelta(days=365), end)
     return s[-1]["value"] if s else None
 
 
-def estimate(db: Session, user: User, days: int = WINDOW_DAYS) -> dict:
-    start = today() - timedelta(days=days)
+def estimate(db: Session, user: User, days: int = WINDOW_DAYS, end=None) -> dict:
+    """Schätzung mit den Fahrten der `days` Tage bis `end` (Standard: heute)."""
+    end = end or today()
+    start = end - timedelta(days=days)
     rides = db.scalars(select(Activity).where(Activity.user_id == user.id, Activity.sport == "ride",
-                                              Activity.duplicate_of.is_(None), Activity.day >= start)).all()
+                                              Activity.duplicate_of.is_(None), Activity.day >= start, Activity.day <= end)).all()
     best = None
     best5 = None
     for a in rides:
@@ -58,7 +61,7 @@ def estimate(db: Session, user: User, days: int = WINDOW_DAYS) -> dict:
         for v, how in cands:
             if not best or v > best["ftp"]:
                 best = {"ftp": v, "method": how, "activity_id": a.id, "name": a.name, "day": a.day.isoformat()}
-    weight = _weight(db, user)
+    weight = _weight(db, user, end)
     out = {"ftp": round(best["ftp"]) if best else None, "ftp_from": best, "weight": weight,
            "wkg": round(best["ftp"] / weight, 2) if best and weight else None, "rides": len(rides),
            "rides_with_power": sum(1 for a in rides if a.avg_power or (a.details or {}).get("pc"))}
@@ -69,7 +72,7 @@ def estimate(db: Session, user: User, days: int = WINDOW_DAYS) -> dict:
         elif best:
             vo2, how = 10.8 * (best["ftp"] / 0.8) / weight + 7, "aus der FTP"
     if vo2 is None:
-        ctx = Context(db, user, today() - timedelta(days=days), today())
+        ctx = Context(db, user, start, end)
         seen = sorted(a.max_hr for lst in ctx.acts.values() for a in lst if a.max_hr and 120 < a.max_hr < 225)
         rhr = sorted(ctx.series["resting_hr"].values())
         if len(seen) >= 3 and rhr:
@@ -79,10 +82,10 @@ def estimate(db: Session, user: User, days: int = WINDOW_DAYS) -> dict:
     return out
 
 
-def store(db: Session, user: User, est: dict) -> None:
+def store(db: Session, user: User, est: dict, day=None) -> None:
     """Als Messgrößen ablegen (Quelle BodyBase), damit FTP und VO₂max in Trends und Verläufen auftauchen."""
     w = Writer(db, user.id, "bodybase")
-    t = day_ts(today())
+    t = day_ts(day or today())
     if est.get("ftp"):
         w.sample("ftp", t, est["ftp"])
     if est.get("vo2max"):
@@ -112,6 +115,16 @@ def notices(db: Session, user: User) -> dict:
         store(db, user, est)
     except Exception:
         db.rollback()
+    if not prefs.get("perf_backfilled") and not prefs.get("perf_backfill_started"):
+        user.prefs = prefs = {**prefs, "perf_backfill_started": 1}
+        db.commit()
+        count = db.scalar(select(func.count()).select_from(Activity).where(Activity.user_id == user.id)) or 0
+        if count < 300:  # wenig Daten: gleich hier, sonst im Hintergrund
+            backfill(db, user)
+            user.prefs = prefs = {**(user.prefs or {}), "perf_backfilled": 1}
+            db.commit()
+        else:
+            backfill_async(user.id)
     if "last_activity_id" not in seen:  # beim ersten Mal nichts Altes hochspülen
         seen = {"last_activity_id": max_id, "ftp": est["ftp"]}
         user.prefs = {**prefs, "notices": seen}
@@ -137,3 +150,42 @@ def mark_seen(db: Session, user: User, activity_id: int | None, ftp: int | None)
         seen["ftp"] = int(ftp)
     user.prefs = {**prefs, "notices": seen}
     db.commit()
+
+
+def backfill(db: Session, user: User) -> int:
+    """Verlauf rückwirkend: wöchentlich (jeweils Sonntag) die Schätzung aus den 90 Tagen davor, seit der ersten Aktivität."""
+    first = db.scalar(select(func.min(Activity.day)).where(Activity.user_id == user.id))
+    if not first:
+        return 0
+    d = first + timedelta(days=(6 - first.weekday()))
+    n = 0
+    last = None
+    while d < today():
+        est = estimate(db, user, end=d)
+        key = (est["ftp"], est["vo2max"])
+        if (est["ftp"] or est["vo2max"]) and key != last:
+            store(db, user, est, d)
+            n += 1
+        last = key
+        d += timedelta(days=7)
+    store(db, user, estimate(db, user))
+    return n
+
+
+def backfill_async(user_id: int) -> None:
+    import threading
+
+    from .database import SessionLocal
+
+    def run():
+        with SessionLocal() as db:
+            user = db.get(User, user_id)
+            if not user:
+                return
+            try:
+                backfill(db, user)
+                user.prefs = {**(user.prefs or {}), "perf_backfilled": 1}
+                db.commit()
+            except Exception:
+                db.rollback()
+    threading.Thread(target=run, daemon=True, name=f"perf-backfill-{user_id}").start()

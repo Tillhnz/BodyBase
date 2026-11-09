@@ -221,6 +221,13 @@ def performance(user: User = Depends(current_user), db: Session = Depends(get_db
     return P.estimate(db, user)
 
 
+@router.post("/performance/recompute")
+def performance_recompute(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """FTP und VO₂max rückwirkend für die ganze Vergangenheit neu berechnen (wöchentliche Werte)."""
+    from .. import performance as P
+    return {"weeks": P.backfill(db, user)}
+
+
 @router.get("/notices")
 def notices(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Neue abgeschlossene Aktivitäten (ohne Gehen) und eine geänderte FTP seit dem letzten Besuch."""

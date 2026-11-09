@@ -233,6 +233,12 @@ def _run_archive(job_id: int, kind: str, path: str) -> None:
             w = Writer(db, job.user_id, kind)
             info = archives.import_strava(w, path, progress) if kind == "strava" else archives.import_whoop(w, path, progress, job.filename or "")
             counts = {**w.flush(), **info, "records": sum(v for k, v in info.items() if k in ("activities", "cycles", "sleeps", "workouts"))}
+            try:  # neue alte Fahrten: FTP- und VO₂max-Verlauf neu rechnen
+                from .. import performance
+                from ..models import User as U
+                performance.backfill(db, db.get(U, job.user_id))
+            except Exception:
+                db.rollback()
             job = db.get(ImportJob, job_id)
             job.status, job.progress, job.counts, job.finished_at = "done", 1.0, counts, utcnow()
             db.commit()
