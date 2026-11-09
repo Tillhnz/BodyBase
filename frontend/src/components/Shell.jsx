@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { startRefresh, useRefreshState } from "../refresh.js";
 import ThemeToggle from "./ThemeToggle.jsx";
 import Notices from "./Notices.jsx";
+import UpdateToast from "./UpdateToast.jsx";
 import { BrandMark } from "./ui.jsx";
 
 export const NAV = [
@@ -65,6 +66,7 @@ export default function Shell({ user, onLogout, children }) {
       <main className="main" id="inhalt" tabIndex={-1}>
         <RefreshPill />
         <Notices />
+        {user.is_admin && ver?.update && <UpdateToast update={ver.update} />}
         <div className="page" key={pathname}>{children}</div>
       </main>
     </div>

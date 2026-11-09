@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api", tags=["version"])
 
 CHECK_EVERY_S = 3600
 _lock = threading.Lock()
-_state = {"behind": None, "checked": 0.0, "running": False}
+_state = {"behind": None, "count": 0, "changes": [], "checked": 0.0, "running": False}
 
 
 def _refresh() -> None:
@@ -22,6 +22,7 @@ def _refresh() -> None:
         behind = r.get("behind")
         with _lock:
             _state["behind"] = bool(behind) if behind is not None else None
+            _state["count"], _state["changes"] = behind or 0, (r.get("changes") or [])[:8]
     except Exception:  # kein Update-Dienst: dann gibt es keinen Hinweis
         with _lock:
             _state["behind"] = None
@@ -36,7 +37,10 @@ def version(user: User = Depends(current_user)):
         stale = time.time() - _state["checked"] > CHECK_EVERY_S and not _state["running"]
         if stale:
             _state["running"] = True
-        behind = _state["behind"]
+        behind, count, changes = _state["behind"], _state["count"], _state["changes"]
     if stale:
         threading.Thread(target=_refresh, daemon=True, name="version-check").start()
-    return {"version": __version__, "update_available": behind}
+    out = {"version": __version__, "update_available": behind}
+    if behind and user.is_admin:  # Details für den Hinweis unten in der Ecke
+        out["update"] = {"count": count, "changes": changes, "id": changes[0] if changes else str(count)}
+    return out
