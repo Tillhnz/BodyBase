@@ -10,5 +10,5 @@ httpx==0.28.1
 python-multipart>=0.0.33
 cryptography>=50
 fitdecode>=0.11.0
-garminconnect>=0.2.25
+garminconnect>=0.3.20
 tzdata
