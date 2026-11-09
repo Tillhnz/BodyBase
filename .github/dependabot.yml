@@ -28,6 +28,9 @@ updates:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
     groups:
+      # vite und sein React-Plugin passen nur in zueinander passenden Versionen: immer zusammen aktualisieren
+      vite:
+        patterns: ["vite", "@vitejs/*", "esbuild"]
       npm:
         patterns: ["*"]
         update-types: [minor, patch]

@@ -55,7 +55,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      - run: npm install --no-audit --no-fund
+      # wie im Docker-Build: genau die Versionen aus package-lock.json (fällt sofort auf, wenn die Sperrdatei nicht passt)
+      - run: npm ci --no-audit --no-fund
       - name: Bauen
         run: npm run build
 
@@ -79,3 +80,20 @@ jobs:
         run: |
           bash -n install.sh && bash -n proxmox/create-lxc.sh
           POSTGRES_PASSWORD=x SECRET_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx PUBLIC_URL=http://localhost docker compose config -q
+
+  android:
+    # Gradle-Updates von Dependabot vor dem Übernehmen bauen (sonst würde erst der Release-Build scheitern)
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'dependabot/gradle')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: APK bauen
+        working-directory: android
+        run: gradle --no-daemon assembleRelease

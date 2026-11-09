@@ -14,6 +14,20 @@ permissions:
   actions: write
 
 jobs:
+  retry:
+    # GitHub startet gelegentlich einzelne Jobs gar nicht (Lauf „fehlgeschlagen“, aber kein Job mit Fehler):
+    # dann einmal neu starten, statt das Update liegen zu lassen
+    if: github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.run_attempt == 1
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN: ${{ github.event.workflow_run.id }}
+    steps:
+      - run: |
+          failed=$(gh api "repos/$GH_REPO/actions/runs/$RUN/jobs" --jq '[.jobs[] | select(.conclusion == "failure")] | length')
+          if [ "$failed" = "0" ]; then gh api -X POST "repos/$GH_REPO/actions/runs/$RUN/rerun" && echo "Neu gestartet"; else echo "Echter Fehler in $failed Job(s)"; fi
+
   merge:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
@@ -34,9 +48,12 @@ jobs:
           num=$(jq -r .number <<<"$pr"); author=$(jq -r .author.login <<<"$pr"); title=$(jq -r .title <<<"$pr")
           [ "$(jq -r .headRefOid <<<"$pr")" = "$SHA" ] || { echo "Neuerer Stand vorhanden, warte"; exit 0; }
           [[ "$author" == "dependabot[bot]" || "$author" == "app/dependabot" ]] || { echo "Nicht von Dependabot"; exit 0; }
-          # Major-Sprünge (z. B. „from 4.2.1 to 5.0.0“) nicht automatisch
-          if [[ "$title" =~ from\ v?([0-9]+)[^\ ]*\ to\ v?([0-9]+) ]] && [ "${BASH_REMATCH[1]}" != "${BASH_REMATCH[2]}" ]; then
-            gh pr comment "$num" --body "Großer Versionssprung – bitte selbst prüfen. (Automatisch übernommen werden nur kleine Updates.)"
+          # Major-Sprünge (z. B. „from 4.2.1 to 5.0.0“) nicht automatisch – auch in Sammel-PRs, die mehrere Pakete
+          # nur im Text aufzählen („Updates `vite` from 7.1.0 to 8.3.6“)
+          body=$(gh pr view "$num" --json body --jq .body)
+          major=$(printf '%s\n%s\n' "$title" "$body" | grep -oE 'from v?[0-9]+[^ ]* to v?[0-9]+' | awk '{split($2,a,".");split($4,b,".");gsub("v","",a[1]);gsub("v","",b[1]);if(a[1]!=b[1])print}' | head -1)
+          if [ -n "$major" ]; then
+            gh pr comment "$num" --body "Großer Versionssprung ($major) – bitte selbst prüfen. (Automatisch übernommen werden nur kleine Updates.)"
             exit 0
           fi
           gh pr merge "$num" --squash --delete-branch
