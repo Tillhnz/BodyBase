@@ -1260,3 +1260,24 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px color-mix(in s
 .score-num, .domain-score { text-shadow: 0 4px 30px color-mix(in srgb, var(--c) 45%, transparent); }
 .calendar rect.cal-0 { fill: var(--body-base); }
 .table th { background: transparent; }
+
+/* Hinweis nach Aktivitäten / FTP */
+.notice-back { position: fixed; inset: 0; z-index: 2600; display: grid; place-items: center; padding: 1rem;
+  background: rgba(4, 7, 14, 0.35); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fade 0.2s ease-out; }
+.notice { width: min(380px, 100%); display: flex; flex-direction: column; gap: 0.8rem; padding: 1.1rem; border-radius: 24px;
+  background: var(--glass-strong); border: 1px solid var(--line); backdrop-filter: blur(30px) saturate(160%); -webkit-backdrop-filter: blur(30px) saturate(160%);
+  box-shadow: inset 0 1px 0 var(--glass-hi), 0 40px 90px -30px rgba(0, 0, 0, 0.7); animation: notice-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@keyframes notice-in { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: none; } }
+.notice-ftp { text-align: center; padding: 0.6rem; border-radius: 16px; background: color-mix(in srgb, var(--c-activity) 12%, transparent); }
+.notice-ftp strong { display: block; font-family: var(--font-display); font-size: 2.4rem; line-height: 1.1; color: var(--c-activity); }
+.notice-ftp small { font-size: 1rem; margin-left: 0.2rem; }
+.notice-ftp small.up { color: var(--good); } .notice-ftp small.down { color: var(--signal); }
+.notice-act { display: flex; flex-direction: column; gap: 0.7rem; padding: 0.8rem; border-radius: 16px; background: var(--panel-2);
+  border: 1px solid var(--line); color: inherit; text-decoration: none; }
+.notice-act:hover { border-color: var(--line-2); }
+.notice-title { display: flex; gap: 0.7rem; align-items: center; }
+.notice-title > div { display: flex; flex-direction: column; min-width: 0; }
+.notice-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notice-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.4rem; text-align: center; }
+.notice-stats b { display: block; font-family: var(--font-display); font-size: 1.25rem; }
+.notice-stats small { color: var(--mute); font-size: 0.7rem; }

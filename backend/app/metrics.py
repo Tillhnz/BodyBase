@@ -49,6 +49,7 @@ METRICS: dict[str, Metric] = {m.key: m for m in [
     Metric("spo2", "Sauerstoffsättigung", "%", "heart", "avg", 0, "up", 70, 100),
     Metric("respiratory_rate", "Atemfrequenz", "/min", "heart", "avg", 1, None, 4, 40),
     Metric("vo2max", "VO₂max", "ml/kg/min", "heart", "avg", 1, "up", 10, 95),
+    Metric("ftp", "FTP", "W", "activity", "avg", 0, "up", 30, 700),
     Metric("body_temp", "Körpertemperatur", "°C", "heart", "avg", 1, None, 33, 43),
     Metric("skin_temp_dev", "Hauttemperatur (Abweichung)", "°C", "heart", "avg", 2, None, -6, 6),
     # Bewegung

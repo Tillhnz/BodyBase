@@ -64,6 +64,7 @@ export default function Activities() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const v = useDataVersion();
+  const [{ data: perf }] = useAsync(() => api.get("/performance"), [v]);
   const [{ data: stats }] = useAsync(() => api.get(`/activities/stats?days=${days || 3650}`), [days, v]);
 
   useEffect(() => {
@@ -104,6 +105,8 @@ export default function Activities() {
           <Kpi label="Strecke" value={fmtNum(totals.distance_m / 1000, 0)} unit="km" />
           <Kpi label="Höhenmeter" value={fmtNum(totals.elevation_m, 0)} unit="m" />
           <Kpi label="Kalorien" value={fmtNum(totals.calories, 0)} unit="kcal" />
+          {perf?.ftp && <Kpi label="FTP (90 Tage)" value={fmtNum(perf.ftp)} unit="W" sub={perf.wkg ? `${fmtNum(perf.wkg, 2)} W/kg` : perf.ftp_from?.method} />}
+          {perf?.vo2max && <Kpi label="VO₂max geschätzt" value={fmtNum(perf.vo2max, 1)} sub={perf.vo2_method} />}
         </div>
       )}
       {stats && stats.calendar.length > 0 && (

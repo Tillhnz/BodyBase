@@ -214,6 +214,32 @@ def report_month(month: str | None = None, user: User = Depends(current_user), d
     return report.month(db, user, y, m)
 
 
+@router.get("/performance")
+def performance(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Geschätzte FTP (Radfahren) und VO₂max aus den letzten 90 Tagen."""
+    from .. import performance as P
+    return P.estimate(db, user)
+
+
+@router.get("/notices")
+def notices(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Neue abgeschlossene Aktivitäten (ohne Gehen) und eine geänderte FTP seit dem letzten Besuch."""
+    from .. import performance as P
+    return P.notices(db, user)
+
+
+class SeenIn(BaseModel):
+    activity_id: int | None = None
+    ftp: int | None = None
+
+
+@router.post("/notices/seen")
+def notices_seen(body: SeenIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    from .. import performance as P
+    P.mark_seen(db, user, body.activity_id, body.ftp)
+    return {"ok": True}
+
+
 @router.get("/scores")
 def get_scores(days: int = Query(14, ge=1, le=120), user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Bereitschaft, Auslastung und Schlaf (0–100) mit Aufschlüsselung und Verlauf."""

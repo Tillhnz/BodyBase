@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { api } from "../api.js";
 import { startRefresh, useRefreshState } from "../refresh.js";
 import ThemeToggle from "./ThemeToggle.jsx";
+import Notices from "./Notices.jsx";
 import { BrandMark } from "./ui.jsx";
 
 export const NAV = [
@@ -63,6 +64,7 @@ export default function Shell({ user, onLogout, children }) {
       </aside>
       <main className="main" id="inhalt" tabIndex={-1}>
         <RefreshPill />
+        <Notices />
         <div className="page" key={pathname}>{children}</div>
       </main>
     </div>
