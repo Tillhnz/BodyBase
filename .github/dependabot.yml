@@ -61,6 +61,9 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # ab 1.18 verlangt androidx.core compileSdk 37 und Android-Gradle-Plugin 9 (größerer Umbau)
+      - dependency-name: "androidx.core:*"
+        versions: [">=1.18.0"]
     groups:
       android:
         patterns: ["*"]
