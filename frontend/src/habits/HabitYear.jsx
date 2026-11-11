@@ -20,8 +20,11 @@ export default function HabitYear({ habitId, onChanged, compact = false }) {
   const first = new Date(`${year}-01-01T12:00:00`);
   const offset = (first.getDay() + 6) % 7;
   const weeks = Math.ceil((data.days.length + offset) / 7);
-  const gap = 3;
-  const cell = Math.max(7, Math.min(16, Math.floor((width - 26) / weeks) - gap));
+  // schmal (Handy): zwei Halbjahre untereinander, damit das ganze Jahr ohne Scrollen passt
+  const parts = width < 640 ? 2 : 1;
+  const perPart = Math.ceil(weeks / parts);
+  const gap = width < 400 ? 2 : 3;
+  const cell = Math.max(5, Math.min(16, Math.floor((width - 26) / perPart) - gap));
   const max = Math.max(1, ...data.days.map((d) => d.value || 0));
 
   async function save(day, value) {
@@ -57,22 +60,29 @@ export default function HabitYear({ habitId, onChanged, compact = false }) {
         </span>
       </div>
       <div ref={ref} className="hy-grid-wrap">
-        <svg width={26 + weeks * (cell + gap)} height={16 + 7 * (cell + gap)} role="img" aria-label={`${h.name} im Jahr ${year}`}>
-          {MONTHS.map((m, i) => {
-            const idx = Math.round((new Date(year, i, 1) - new Date(year, 0, 1)) / 864e5);
-            return <text key={m} x={26 + Math.floor((idx + offset) / 7) * (cell + gap)} y={10} className="rp-tick">{m}</text>;
-          })}
-          {WD.map((w, i) => w && <text key={i} x={0} y={16 + i * (cell + gap) + cell - 1} className="rp-tick">{w}</text>)}
-          {data.days.map((d, i) => {
-            const k = i + offset;
-            return (
-              <rect key={d.day} x={26 + Math.floor(k / 7) * (cell + gap)} y={16 + (k % 7) * (cell + gap)} width={cell} height={cell} rx={Math.min(4, cell / 3)}
-                className={`hy-cell ${level(d)}${d.future ? " future" : ""}`} onClick={() => click(d)}>
-                <title>{`${fmtDay(d.day)}: ${d.value ? fmtNum(d.value) : "–"}${d.target && h.kind === "count" ? ` / ${fmtNum(d.target)}` : ""}${d.future ? "" : " · zum Ändern klicken"}`}</title>
-              </rect>
-            );
-          })}
-        </svg>
+        {Array.from({ length: parts }, (_, p) => {
+          const w0 = p * perPart, w1 = Math.min(weeks, w0 + perPart);
+          return (
+            <svg key={p} width={26 + (w1 - w0) * (cell + gap)} height={16 + 7 * (cell + gap)} role="img" aria-label={`${h.name} im Jahr ${year}${parts > 1 ? (p ? ", 2. Halbjahr" : ", 1. Halbjahr") : ""}`}>
+              {MONTHS.map((m, i) => {
+                const idx = Math.round((new Date(year, i, 1) - new Date(year, 0, 1)) / 864e5);
+                const wk = Math.floor((idx + offset) / 7);
+                return wk >= w0 && wk < w1 ? <text key={m} x={26 + (wk - w0) * (cell + gap)} y={10} className="rp-tick">{m}</text> : null;
+              })}
+              {WD.map((w, i) => w && <text key={i} x={0} y={16 + i * (cell + gap) + cell - 1} className="rp-tick">{w}</text>)}
+              {data.days.map((d, i) => {
+                const k = i + offset, wk = Math.floor(k / 7);
+                if (wk < w0 || wk >= w1) return null;
+                return (
+                  <rect key={d.day} x={26 + (wk - w0) * (cell + gap)} y={16 + (k % 7) * (cell + gap)} width={cell} height={cell} rx={Math.min(4, cell / 3)}
+                    className={`hy-cell ${level(d)}${d.future ? " future" : ""}`} onClick={() => click(d)}>
+                    <title>{`${fmtDay(d.day)}: ${d.value ? fmtNum(d.value) : "–"}${d.target && h.kind === "count" ? ` / ${fmtNum(d.target)}` : ""}${d.future ? "" : " · zum Ändern antippen"}`}</title>
+                  </rect>
+                );
+              })}
+            </svg>
+          );
+        })}
       </div>
       {!compact && (
         <div className="hy-months">

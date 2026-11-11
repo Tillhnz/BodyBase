@@ -69,6 +69,11 @@ class Prefs(ctx: Context) {
         sp.edit().remove("c_$kind").commit()
     }
 
+    /** Zweiter Durchgang: Stundensummen über die ganze Vergangenheit, damit auch alte, doppelt gezählte Rohdaten ersetzt werden. */
+    var aggregatedFull: Boolean
+        get() = sp.getBoolean("aggregated_full", false)
+        set(v) = sp.edit().putBoolean("aggregated_full", v).apply()
+
     var aggregatedResent: Boolean
         get() = sp.getBoolean("aggregated_resent", false)
         set(v) = sp.edit().putBoolean("aggregated_resent", v).apply()

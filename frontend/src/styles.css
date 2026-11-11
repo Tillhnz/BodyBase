@@ -1339,7 +1339,7 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px color-mix(in s
 .hy-head { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; }
 .hy-years { display: flex; gap: 0.5rem; align-items: center; }
 .hy-sum { color: var(--mute); margin-left: auto; }
-.hy-grid-wrap { overflow-x: auto; max-width: 100%; }
+.hy-grid-wrap { display: flex; flex-direction: column; gap: 0.6rem; max-width: 100%; overflow: hidden; }
 .hy-cell { fill: color-mix(in srgb, var(--mute) 14%, transparent); cursor: pointer; transition: opacity 0.15s; }
 .hy-cell:hover { opacity: 0.7; }
 .hy-cell.future { cursor: default; fill: color-mix(in srgb, var(--mute) 6%, transparent); }

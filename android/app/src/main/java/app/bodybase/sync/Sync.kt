@@ -157,6 +157,12 @@ object Sync {
                 prefs.aggregatedResent = true
             }
             val now = Instant.now()
+            if (!prefs.aggregatedFull) {
+                // Schritte & Co. einmal für zwei Jahre neu senden (Health Connect liefert, was es hat; der Server ersetzt Rohdaten)
+                Kinds.ALL.filter { it.aggregated }.forEach { prefs.setCursor(it.key, now.minus(Duration.ofDays(730)).plus(it.overlap)) }
+                prefs.aggregatedFull = true
+                prefs.aggregatedResent = true
+            }
             for (kind in kinds) {
                 var from = prefs.cursor(kind.key)?.minus(kind.overlap) ?: now.minus(Duration.ofDays(30))
                 var sent = 0
@@ -169,6 +175,12 @@ object Sync {
                         problems += "${kind.label}: kein Zugriff" + if (background) " im Hintergrund" else ""
                         null
                     } catch (e: Exception) {
+                        if (from.isBefore(now.minus(Duration.ofDays(31)))) {
+                            // weit zurück liefert Health Connect ohne Verlaufszugriff nichts: überspringen statt hängen bleiben
+                            prefs.setCursor(kind.key, to)
+                            from = to
+                            continue
+                        }
                         problems += "${kind.label}: ${e.message ?: e.javaClass.simpleName}"
                         null
                     } ?: break
