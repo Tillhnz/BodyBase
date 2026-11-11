@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { MonthReport, WeekReport } from "./Report.jsx";
+import { BioAgeView } from "./BioAge.jsx";
 import { api } from "../api.js";
 import { useWidth } from "../components/charts.jsx";
 import { Loading } from "../components/feedback.jsx";
@@ -25,16 +26,16 @@ export default function Analysis() {
   const view = params.get("ansicht") || "woche";
   const tabs = (
     <Segmented value={view} onChange={(v) => setParams({ ansicht: v }, { replace: true })} label="Ansicht"
-      options={[{ value: "woche", label: "Woche" }, { value: "monat", label: "Monat" }, { value: "statistik", label: "Statistik" }]} />
+      options={[{ value: "woche", label: "Woche" }, { value: "monat", label: "Monat" }, { value: "statistik", label: "Statistik" }, { value: "bioalter", label: "Bio-Alter" }]} />
   );
   if (view === "statistik") return <Statistics tabs={tabs} />;
   return (
     <>
       <div className="page-head">
-        <div><h1>Gesundheitsbild</h1><p>Leistungsbericht aus allen Quellen</p></div>
+        <div><h1>Gesundheitsbild</h1><p>{view === "bioalter" ? "Biologisches Alter aus allen Messwerten" : "Leistungsbericht aus allen Quellen"}</p></div>
         <div className="actions">{tabs}</div>
       </div>
-      {view === "monat" ? <MonthReport /> : <WeekReport />}
+      {view === "bioalter" ? <BioAgeView /> : view === "monat" ? <MonthReport /> : <WeekReport />}
     </>
   );
 }

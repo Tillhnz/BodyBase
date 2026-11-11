@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { confirmDialog, Loading, toast } from "../components/feedback.jsx";
-import { EmptyState, Modal } from "../components/ui.jsx";
+import { EmptyState, Modal, Segmented } from "../components/ui.jsx";
 import { fmtDay, fmtNum, todayIso, weekdayShort } from "../fmt.js";
 import ExercisePicker from "../strength/ExercisePicker.jsx";
 import { useExercises } from "../strength/shared.js";
 import { HabitRow } from "./HabitsToday.jsx";
+import HabitYear from "./HabitYear.jsx";
 
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const COLORS = ["var(--c-recovery)", "var(--c-activity)", "var(--c-heart)", "var(--c-body)", "var(--c-sleep)", "var(--c-nutrition)"];
@@ -14,6 +15,7 @@ export default function Habits() {
   const [items, setItems] = useState(null);
   const [edit, setEdit] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [view, setView] = useState("heute");
   async function load() { setItems(await api.get(`/habits${showArchived ? "?archived=true" : ""}`)); }
   useEffect(() => { load().catch(() => setItems([])); }, [showArchived]); // eslint-disable-line react-hooks/exhaustive-deps
   const update = (h) => setItems((cur) => cur.map((x) => (x.id === h.id ? h : x)));
@@ -26,6 +28,7 @@ export default function Habits() {
           <p>Kleine Dinge jeden Tag: Liegestütze, Dehnen, Wasser. Mit Zielen, die jede Woche ein Stück wachsen. Übungen zählen auch für die Körperkarte.</p>
         </div>
         <div className="actions">
+          <Segmented value={view} onChange={setView} label="Ansicht" options={[{ value: "heute", label: "Aktuell" }, { value: "jahr", label: "Jahresübersicht" }]} />
           <label className="check"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />Archivierte zeigen</label>
           <button className="btn primary" onClick={() => setEdit({})}>Neue Gewohnheit</button>
         </div>
@@ -34,14 +37,17 @@ export default function Habits() {
         <EmptyState title="Noch keine Gewohnheit" text="Lege zum Beispiel „Liegestütze“ an: Start mit 20 am Tag, jede Woche 5 mehr.">
           <button className="btn primary" onClick={() => setEdit({ name: "Liegestütze", target: 20, increment: 5, unit: "Wdh." })}>Liegestütze anlegen</button>
         </EmptyState>
-      ) : items.map((h) => <HabitCard key={h.id} h={h} onChange={update} onEdit={() => setEdit(h)} />)}
+      ) : view === "jahr" ? (
+        items.map((h) => <section key={h.id} className="panel"><HabitYear habitId={h.id} compact onChanged={load} /></section>)
+      ) : items.map((h) => <HabitCard key={h.id} h={h} onChange={update} onEdit={() => setEdit(h)} onReload={load} />)}
       {edit && <HabitForm initial={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
     </div>
   );
 }
 
-function HabitCard({ h, onChange, onEdit }) {
+function HabitCard({ h, onChange, onEdit, onReload }) {
   const [day, setDay] = useState(null);
+  const [year, setYear] = useState(false);
   const recent = h.recent;
   const max = Math.max(1, ...recent.map((x) => Math.max(x.value || 0, x.target || 0)));
   return (
@@ -66,7 +72,9 @@ function HabitCard({ h, onChange, onEdit }) {
       </div>
       <div className="actions" style={{ marginTop: "0.6rem" }}>
         <button className="btn small" onClick={onEdit}>Bearbeiten</button>
+        <button className="btn small" onClick={() => setYear(!year)}>{year ? "Verlauf schließen" : "Verlauf & nachtragen"}</button>
       </div>
+      {year && <HabitYear habitId={h.id} onChanged={onReload} />}
       {day && <DayDialog h={h} day={day} onClose={() => setDay(null)} onSaved={(next) => { onChange(next); setDay(null); }} />}
     </section>
   );

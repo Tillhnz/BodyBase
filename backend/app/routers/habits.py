@@ -43,6 +43,16 @@ def get_habit(habit_id: int, days: int = 120, user: User = Depends(current_user)
     return H.habit_dict(db, _own(db, user, habit_id), today(), days=max(7, min(days, 400)))
 
 
+@router.get("/habits/{habit_id}/history")
+def habit_history(habit_id: int, year: int | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Jahresübersicht einer Gewohnheit (zum Ansehen und Nachtragen)."""
+    t = today()
+    y = year or t.year
+    if not 1970 <= y <= t.year:
+        raise HTTPException(422, "Ungültiges Jahr")
+    return H.history(db, _own(db, user, habit_id), y, t)
+
+
 @router.post("/habits", status_code=201)
 def create_habit(body: Body, user: User = Depends(current_user), db: Session = Depends(get_db)):
     try:
@@ -100,6 +110,8 @@ def log_habit(habit_id: int, data: LogIn, user: User = Depends(current_user), db
         raise HTTPException(422, "Ungültiges Datum")
     if d > today():
         raise HTTPException(422, "Für die Zukunft kann nichts eingetragen werden.")
+    if d < date(1970, 1, 1):
+        raise HTTPException(422, "Ungültiges Datum")
     H.log(db, h, d, value=data.value, add=data.add)
     return H.habit_dict(db, h, today())
 

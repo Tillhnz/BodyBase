@@ -214,6 +214,13 @@ def report_month(month: str | None = None, user: User = Depends(current_user), d
     return report.month(db, user, y, m)
 
 
+@router.get("/bio-age")
+def bio_age(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Biologisches Alter aus allen Messwerten, mit Begründung je Messwert."""
+    from .. import bioage
+    return bioage.compute(db, user)
+
+
 @router.get("/performance")
 def performance(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Geschätzte FTP (Radfahren) und VO₂max aus den letzten 90 Tagen."""

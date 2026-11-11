@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .models import Exercise, Habit, HabitLog
@@ -177,3 +177,33 @@ def muscle_load(db: Session, user_id: int, start: date) -> tuple[dict, list]:
             out[m] += sets * 0.5
         info.append({"habit": h.name, "total": total, "unit": h.unit, "sets": round(sets, 1)})
     return dict(out), info
+
+
+def history(db: Session, h: Habit, year: int, today: date) -> dict:
+    """Ein ganzes Jahr: jeder Tag mit Wert, Ziel und ob geschafft; dazu Monats- und Jahressummen."""
+    start, end = date(year, 1, 1), date(year, 12, 31)
+    logs = {row.day: row.value for row in db.scalars(select(HabitLog).where(HabitLog.habit_id == h.id, HabitLog.day >= start, HabitLog.day <= end))}
+    days, months = [], []
+    for m in range(1, 13):
+        months.append({"month": m, "due": 0, "done": 0, "total": 0.0, "logged": 0})
+    d = start
+    while d <= end:
+        v = logs.get(d)
+        due = due_on(h, d) and d <= today
+        done = is_done(h, d, v)
+        days.append({"day": d.isoformat(), "value": v, "target": target_for(h, d), "due": due_on(h, d), "done": done, "future": d > today})
+        mo = months[d.month - 1]
+        mo["due"] += 1 if due else 0
+        mo["done"] += 1 if done and (due or d < h.start) else 0
+        mo["total"] += v or 0
+        mo["logged"] += 1 if v else 0
+        d += timedelta(days=1)
+    for mo in months:
+        mo["rate"] = round(min(1, mo["done"] / mo["due"]), 2) if mo["due"] else None
+    due_n = sum(m["due"] for m in months)
+    first = db.scalar(select(func.min(HabitLog.day)).where(HabitLog.habit_id == h.id))
+    first_year = min(h.start.year, first.year if first else h.start.year)
+    return {"habit": {"id": h.id, "name": h.name, "kind": h.kind, "unit": h.unit, "color": h.color, "start": h.start.isoformat()},
+            "year": year, "years": list(range(first_year - 1, today.year + 1)), "days": days, "months": months,
+            "summary": {"done": sum(m["done"] for m in months), "due": due_n, "rate": round(min(1, sum(m["done"] for m in months) / due_n), 2) if due_n else None,
+                        "total": sum(m["total"] for m in months), "logged": sum(m["logged"] for m in months)}}
