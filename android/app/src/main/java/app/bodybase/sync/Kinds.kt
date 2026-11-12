@@ -15,6 +15,7 @@ import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.IntervalRecord
 import androidx.health.connect.client.records.LeanBodyMassRecord
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
@@ -157,22 +158,52 @@ private val EXERCISES = mapOf(
     ExerciseSessionRecord.EXERCISE_TYPE_EXERCISE_CLASS to "exercise_class",
 )
 
+/**
+ * Stundenwerte ohne Doppelzählung: je App (z. B. WHOOP, Google Fit, Samsung Health) die Stundensumme, dann pro
+ * Stunde der höchste Wert. Zählen zwei Apps dieselben Schritte, bleibt so nur einer übrig; Einträge über mehrere
+ * Stunden werden anteilig verteilt. (Die Health-Connect-Summen addieren Apps, die nicht in der Prioritätenliste stehen.)
+ */
+suspend inline fun <reified T> HealthConnectClient.hourlyMax(from: Instant, to: Instant, crossinline value: (T) -> Double): List<Pair<Instant, Double>>
+        where T : IntervalRecord {
+    val start = from.truncatedTo(ChronoUnit.HOURS)
+    if (!start.isBefore(to)) return emptyList()
+    val perApp = HashMap<String, TreeMap<Instant, Double>>()
+    for (r in all<T>(start, to)) {
+        val v = value(r)
+        if (v.isNaN() || v <= 0) continue
+        val app = r.metadata.dataOrigin.packageName
+        val total = Duration.between(r.startTime, r.endTime).toMillis().coerceAtLeast(1).toDouble()
+        var h = r.startTime.truncatedTo(ChronoUnit.HOURS)
+        while (h.isBefore(r.endTime) || h == r.startTime) {
+            val a = maxOf(h, r.startTime)
+            val b = minOf(h.plus(Duration.ofHours(1)), r.endTime)
+            val share = if (r.endTime == r.startTime) 1.0 else Duration.between(a, b).toMillis() / total
+            if (share > 0 && !h.isBefore(start)) perApp.getOrPut(app) { TreeMap() }.merge(h, v * share, Double::plus)
+            h = h.plus(Duration.ofHours(1))
+            if (r.endTime == r.startTime) break
+        }
+    }
+    val best = TreeMap<Instant, Double>()
+    for (m in perApp.values) for ((h, v) in m) best.merge(h, v) { x, y -> maxOf(x, y) }
+    return best.map { (h, v) -> h to v }
+}
+
 object Kinds {
     private val H6: Duration = Duration.ofHours(6)
     private val D2: Duration = Duration.ofDays(2)
 
     val ALL: List<Kind> = listOf(
         Kind("steps", "Schritte", Group.ACTIVITY, StepsRecord::class, D2, aggregated = true) { c, a, b ->
-            c.hourly(StepsRecord.COUNT_TOTAL, a, b).map { (s, e, v) -> span(s, e).put("count", v) }
+            c.hourlyMax<StepsRecord>(a, b) { it.count.toDouble() }.map { (h, v) -> span(h, h.plus(Duration.ofHours(1))).put("count", Math.round(v)) }
         },
         Kind("distance", "Strecke", Group.ACTIVITY, DistanceRecord::class, D2, aggregated = true) { c, a, b ->
-            c.hourly(DistanceRecord.DISTANCE_TOTAL, a, b).map { (s, e, v) -> span(s, e).put("meters", v.inMeters) }
+            c.hourlyMax<DistanceRecord>(a, b) { it.distance.inMeters }.map { (h, v) -> span(h, h.plus(Duration.ofHours(1))).put("meters", round1(v)) }
         },
         Kind("active_calories", "Aktive Kalorien", Group.ACTIVITY, ActiveCaloriesBurnedRecord::class, D2, aggregated = true) { c, a, b ->
-            c.hourly(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL, a, b).map { (s, e, v) -> span(s, e).put("calories", v.inKilocalories) }
+            c.hourlyMax<ActiveCaloriesBurnedRecord>(a, b) { it.energy.inKilocalories }.map { (h, v) -> span(h, h.plus(Duration.ofHours(1))).put("calories", round1(v)) }
         },
         Kind("total_calories", "Kalorien gesamt", Group.ACTIVITY, TotalCaloriesBurnedRecord::class, D2, aggregated = true) { c, a, b ->
-            c.hourly(TotalCaloriesBurnedRecord.ENERGY_TOTAL, a, b).map { (s, e, v) -> span(s, e).put("calories", v.inKilocalories) }
+            c.hourlyMax<TotalCaloriesBurnedRecord>(a, b) { it.energy.inKilocalories }.map { (h, v) -> span(h, h.plus(Duration.ofHours(1))).put("calories", round1(v)) }
         },
         Kind("exercise", "Trainings", Group.ACTIVITY, ExerciseSessionRecord::class, D2) { c, a, b ->
             c.all<ExerciseSessionRecord>(a, b).map { r ->

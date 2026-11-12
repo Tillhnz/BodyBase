@@ -71,8 +71,8 @@ class Prefs(ctx: Context) {
 
     /** Zweiter Durchgang: Stundensummen über die ganze Vergangenheit, damit auch alte, doppelt gezählte Rohdaten ersetzt werden. */
     var aggregatedFull: Boolean
-        get() = sp.getBoolean("aggregated_full", false)
-        set(v) = sp.edit().putBoolean("aggregated_full", v).apply()
+        get() = sp.getBoolean("aggregated_full2", false)
+        set(v) = sp.edit().putBoolean("aggregated_full2", v).apply()
 
     var aggregatedResent: Boolean
         get() = sp.getBoolean("aggregated_resent", false)
