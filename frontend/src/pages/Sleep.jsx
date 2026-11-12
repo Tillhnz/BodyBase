@@ -64,6 +64,38 @@ function SleepBars({ nights, goal }) {
   );
 }
 
+function Tonight() {
+  const v = useDataVersion();
+  const [{ data: n }] = useAsync(() => api.get("/sleep/need"), [v]);
+  if (!n) return null;
+  const max = Math.max(...n.history.map((h) => Math.max(h.need, h.asleep || 0)), 1);
+  return (
+    <section className="panel tonight">
+      <div className="tonight-main">
+        <div>
+          <span className="rp-k">Schlafbedarf heute Nacht</span>
+          <strong className="tonight-num">{fmtMinutes(n.need)}</strong>
+          {n.bedtime && <span className="small muted">Ins Bett um <b>{n.bedtime}</b> für Aufstehen um {n.wake}</span>}
+        </div>
+        <ul className="tonight-parts">
+          {n.parts.map((p) => (
+            <li key={p.key}><span>{p.label}{p.text ? <small className="muted"> · {p.text}</small> : null}</span><b>{p.key === "base" ? fmtMinutes(p.min) : `+${p.min} min`}</b></li>
+          ))}
+        </ul>
+      </div>
+      <div className="tonight-hist" aria-label="Bedarf und Schlaf der letzten 14 Nächte">
+        {n.history.map((h) => (
+          <div key={h.day} title={`${h.day}: Bedarf ${fmtMinutes(h.need)}, geschlafen ${h.asleep ? fmtMinutes(h.asleep) : "–"}`}>
+            <i className={`slept${h.asleep && h.asleep >= h.need ? " ok" : ""}`} style={{ height: `${((h.asleep || 0) / max) * 100}%` }} />
+            <i className="needline" style={{ bottom: `${(h.need / max) * 100}%` }} />
+          </div>
+        ))}
+      </div>
+      <p className="tiny muted" style={{ margin: 0 }}>Grundbedarf {n.custom_base ? "aus deinen Einstellungen" : "nach Alter"}, plus Belastung vom Vortag, ein Teil der Schlafschuld der letzten Woche und mehr, wenn HRV, Ruhepuls oder Atmung auf fehlende Erholung deuten. Balken: geschlafen, Strich: Bedarf.</p>
+    </section>
+  );
+}
+
 export default function Sleep() {
   const [days, setDays] = useState(30);
   const v = useDataVersion();
@@ -83,6 +115,7 @@ export default function Sleep() {
         </EmptyState>
       ) : (
         <>
+          <Tonight />
           <div className="kpis">
             <Kpi label="Ø Schlafdauer" value={fmtMinutes(avg.asleep_min)} sub={data.goal ? `Ziel ${fmtMinutes(data.goal)}` : null} />
             {avg.deep_min != null && <Kpi label="Ø Tiefschlaf" value={fmtMinutes(avg.deep_min)} sub={avg.asleep_min ? `${fmtNum((avg.deep_min / avg.asleep_min) * 100)} % der Nacht` : null} />}

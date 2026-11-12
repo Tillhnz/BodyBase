@@ -1355,3 +1355,22 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px color-mix(in s
 .hy-edit form { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
 .hy-edit label { display: flex; flex-direction: column; gap: 0.2rem; }
 .hy-edit input { width: 8rem; }
+
+/* Schlafbedarf heute Nacht */
+.tonight { display: flex; flex-direction: column; gap: 0.9rem; margin-bottom: 1.25rem; }
+.tonight-main { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; }
+.tonight-main > div { display: flex; flex-direction: column; }
+.tonight-num { font-family: var(--font-display); font-size: 2.6rem; line-height: 1.1; color: var(--c-sleep); }
+.tonight-parts { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 220px; max-width: 420px; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.9rem; }
+.tonight-parts li { display: flex; justify-content: space-between; gap: 1rem; }
+.tonight-hist { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; height: 70px; align-items: end; }
+.tonight-hist > div { position: relative; height: 100%; display: flex; align-items: flex-end; }
+.tonight-hist .slept { display: block; width: 100%; border-radius: 4px 4px 2px 2px; background: color-mix(in srgb, var(--c-sleep) 45%, transparent); }
+.tonight-hist .slept.ok { background: var(--c-sleep); }
+.tonight-hist .needline { position: absolute; left: -1px; right: -1px; height: 2px; background: var(--chalk); opacity: 0.7; }
+
+/* Erinnerung (Gewohnheiten) */
+.reminder-panel { padding-block: 0.7rem; }
+.reminder-head { all: unset; cursor: pointer; display: flex; justify-content: space-between; gap: 1rem; width: 100%; font-weight: 600; flex-wrap: wrap; }
+.reminder-form { display: flex; flex-direction: column; gap: 0.7rem; margin-top: 0.8rem; }
+.reminder-form label:not(.check) { display: flex; flex-direction: column; gap: 0.25rem; max-width: 320px; }

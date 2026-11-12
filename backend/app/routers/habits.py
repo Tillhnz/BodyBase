@@ -4,12 +4,13 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import coach
 from .. import habits as H
+from ..config import settings
 from ..database import get_db
 from ..models import Habit, User
 from ..security import current_user
@@ -41,6 +42,46 @@ def list_habits(archived: bool = False, user: User = Depends(current_user), db: 
 @router.get("/habits/{habit_id}")
 def get_habit(habit_id: int, days: int = 120, user: User = Depends(current_user), db: Session = Depends(get_db)):
     return H.habit_dict(db, _own(db, user, habit_id), today(), days=max(7, min(days, 400)))
+
+
+class ReminderIn(BaseModel):
+    enabled: bool = False
+    time: str = Field("20:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    topic: str = Field("", max_length=64, pattern=r"^[A-Za-z0-9_-]*$")
+
+
+@router.get("/habit-reminder")
+def get_reminder(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    from .. import reminders as R
+    c = R.config(user)
+    return {**c, "server_topic": bool(settings.ntfy_topic) and user.role == "admin", "open": R.open_habits(db, user)}
+
+
+@router.put("/habit-reminder")
+def put_reminder(data: ReminderIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    from .. import reminders as R
+    if data.enabled and not (data.topic or (settings.ntfy_topic and user.role == "admin")):
+        raise HTTPException(422, "Bitte ein ntfy-Thema angeben, an das die Erinnerung gehen soll.")
+    prefs = dict(user.prefs or {})
+    old = dict(prefs.get("habit_reminder") or {})
+    prefs["habit_reminder"] = {**old, **data.model_dump()}
+    user.prefs = prefs
+    db.commit()
+    return R.config(user)
+
+
+@router.post("/habit-reminder/test")
+def test_reminder(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    from .. import reminders as R
+    topic = R.topic_for(user)
+    if not topic:
+        raise HTTPException(422, "Kein ntfy-Thema eingestellt.")
+    items = R.open_habits(db, user) or [{"name": "Beispiel-Gewohnheit", "rest": None}]
+    try:
+        R.send(topic, *R.message(items))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Push fehlgeschlagen: {e}") from e
+    return {"ok": True}
 
 
 @router.get("/habits/{habit_id}/history")

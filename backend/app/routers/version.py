@@ -41,6 +41,6 @@ def version(user: User = Depends(current_user)):
     if stale:
         threading.Thread(target=_refresh, daemon=True, name="version-check").start()
     out = {"version": __version__, "update_available": behind}
-    if behind and user.is_admin:  # Details für den Hinweis unten in der Ecke
+    if behind and user.role == "admin":  # Details für den Hinweis unten in der Ecke
         out["update"] = {"count": count, "changes": changes, "id": changes[0] if changes else str(count)}
     return out

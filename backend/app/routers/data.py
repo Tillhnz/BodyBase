@@ -214,6 +214,34 @@ def report_month(month: str | None = None, user: User = Depends(current_user), d
     return report.month(db, user, y, m)
 
 
+@router.get("/sleep/need")
+def sleep_need(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Schlafbedarf für die kommende Nacht, mit Begründung und empfohlener Schlafenszeit."""
+    from datetime import timezone as _tz
+
+    from ..scores import Context
+    from ..timeutil import tz as _zone
+    t = today()
+    ctx = Context(db, user, t - timedelta(days=35), t + timedelta(days=1))
+    out = ctx.need(t + timedelta(days=1))
+    wakes = []
+    for d, n in ctx.nights.items():
+        if d > t - timedelta(days=15) and n.end:
+            loc = n.end.replace(tzinfo=_tz.utc).astimezone(_zone())
+            wakes.append(loc.hour * 60 + loc.minute)
+    wakes.sort()
+    if len(wakes) >= 3:
+        wake = wakes[len(wakes) // 2]
+        bed = (wake - out["need"] - 15) % 1440  # 15 min zum Einschlafen
+        out["wake"] = f"{wake // 60:02d}:{wake % 60:02d}"
+        out["bedtime"] = f"{bed // 60:02d}:{bed % 60:02d}"
+    history = [{"day": (t - timedelta(days=i)).isoformat(), "need": ctx.need(t - timedelta(days=i))["need"],
+                "asleep": round(ctx.nights[t - timedelta(days=i)].asleep_min) if (t - timedelta(days=i)) in ctx.nights and ctx.nights[t - timedelta(days=i)].asleep_min else None}
+               for i in range(13, -1, -1)]
+    out["history"] = history
+    return out
+
+
 @router.get("/bio-age")
 def bio_age(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Biologisches Alter aus allen Messwerten, mit Begründung je Messwert."""
@@ -595,7 +623,7 @@ def sleep_night(day: str, user: User = Depends(current_user), db: Session = Depe
     later = [x for x in nights if x > d.isoformat()]
     return {
         "day": d.isoformat(), "sessions": sessions, "main": main, "hr": hr,
-        "score": sleep_score, "need": info["need"], "readiness": readiness,
+        "score": sleep_score, "need": info["need"], "need_parts": days.ctx.need(d)["parts"], "readiness": readiness,
         "debt": round(info["need"] - main["asleep_min"]) if main and main["asleep_min"] else None,
         "prev_load": days.ctx.load(prev_day)["value"], "late_training": late,
         "week_avg": {"asleep": avg("asleep"), "sleep": avg("sleep"), "deep": avg("deep"), "rem": avg("rem")},

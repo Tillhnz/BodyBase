@@ -48,9 +48,8 @@ class Days:
         self._cache: dict[date, dict] = {}
 
     def need(self, d: date) -> float:
-        """Schlafbedarf: Ziel aus den Einstellungen plus etwas mehr nach Belastung am Vortag (wie bei WHOOP)."""
-        extra = min(60.0, self.ctx.load(d - timedelta(days=1))["load"] * 0.25)
-        return self.need_base + extra
+        """Dynamischer Schlafbedarf (siehe Context.need)."""
+        return self.ctx.need(d)["need"]
 
     def day(self, d: date) -> dict:
         if d in self._cache:

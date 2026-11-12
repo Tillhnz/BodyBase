@@ -65,7 +65,11 @@ class Context:
         self.series = {k: {date.fromisoformat(p["day"]): p["value"] for p in daily_series(db, user, k, first, end)}
                        for k in ("hrv", "resting_hr", "steps", "respiratory_rate")}
         goals = (user.prefs or {}).get("goals") or {}
-        self.sleep_need = float(goals.get("sleep_duration") or 480)
+        # Grundbedarf: eigener Wert aus den Einstellungen, sonst nach Alter (Empfehlung der National Sleep Foundation)
+        age = (datetime.now().year - user.birth_year) if user.birth_year else 35
+        self.sleep_base = float(goals.get("sleep_duration") or (540 if age < 18 else 480 if age < 65 else 450))
+        self.sleep_need = self.sleep_base
+        self._need: dict[date, dict] = {}
         # Schlaf: je Nacht die bevorzugte Quelle (wie in der Schlafansicht)
         order = priority_for(user, "sleep_duration")
         best: dict[date, SleepSession] = {}
@@ -125,6 +129,61 @@ class Context:
 
     # ---------- Schlaf ----------
 
+    def need(self, d: date) -> dict:
+        """Dynamischer Schlafbedarf für die Nacht, die am Morgen von d endet.
+
+        Grundbedarf + Belastung am Vortag + ein Teil der Schlafschuld der letzten 7 Nächte
+        + Erholungsbedarf (HRV unter, Ruhepuls oder Atemfrequenz über dem eigenen Normalwert). Höchstens +2 h.
+        """
+        if d in self._need:
+            return self._need[d]
+        base = self.sleep_base
+        parts = [{"key": "base", "label": "Grundbedarf", "min": round(base)}]
+        # Belastung: je Belastungspunkt etwa 15 s, höchstens 1 h (ähnlich WHOOP)
+        ld = self.load(d - timedelta(days=1))
+        extra_load = min(60.0, ld["load"] * 0.25)
+        if extra_load >= 3:
+            parts.append({"key": "load", "label": "Belastung gestern", "min": round(extra_load),
+                          "text": f"Auslastung {ld['value']}"})
+        # Schlafschuld: Fehlbetrag der letzten 7 Nächte, davon wird pro Nacht etwa ein Fünftel nachgeholt
+        short, nights = 0.0, 0
+        for i in range(1, 8):
+            n = self.nights.get(d - timedelta(days=i))
+            if n and n.asleep_min and n.asleep_min > 60:
+                nights += 1
+                short += max(0.0, base - n.asleep_min) * (1 - i * 0.08)  # ältere Nächte zählen weniger
+        extra_debt = min(45.0, short * 0.2) if nights >= 2 else 0.0
+        if extra_debt >= 3:
+            parts.append({"key": "debt", "label": "Schlafschuld", "min": round(extra_debt),
+                          "text": f"etwa {round(short / 60, 1)} h zu wenig in den letzten {nights} Nächten".replace(".", ",")})
+        # Erholung: Vortageswerte gegenüber dem 30-Tage-Median
+        extra_rec, why = 0.0, []
+
+        def base_of(key):
+            vals = sorted(v for k, v in self.series[key].items() if d - timedelta(days=31) <= k < d - timedelta(days=1))
+            return vals[len(vals) // 2] if len(vals) >= 7 else None
+
+        y = d - timedelta(days=1)
+        hb, hv = base_of("hrv"), self.series["hrv"].get(y) or self.series["hrv"].get(d)
+        if hb and hv and hv < hb * 0.9:
+            extra_rec += min(25.0, (1 - hv / hb) * 100)
+            why.append(f"HRV {round((1 - hv / hb) * 100)} % unter normal")
+        rb, rv = base_of("resting_hr"), self.series["resting_hr"].get(y) or self.series["resting_hr"].get(d)
+        if rb and rv and rv > rb + 3:
+            extra_rec += min(15.0, (rv - rb - 3) * 4)
+            why.append(f"Ruhepuls {round(rv - rb)} bpm erhöht")
+        ab, av = base_of("respiratory_rate"), self.series["respiratory_rate"].get(y) or self.series["respiratory_rate"].get(d)
+        if ab and av and av > ab + 1:
+            extra_rec += 10.0
+            why.append("Atemfrequenz erhöht")
+        extra_rec = min(30.0, extra_rec)
+        if extra_rec >= 3:
+            parts.append({"key": "recovery", "label": "Erholung", "min": round(extra_rec), "text": ", ".join(why)})
+        total = base + min(120.0, extra_load + extra_debt + extra_rec)
+        out = {"need": round(total), "base": round(base), "parts": parts, "custom_base": bool(((self.user.prefs or {}).get("goals") or {}).get("sleep_duration"))}
+        self._need[d] = out
+        return out
+
     @staticmethod
     def _bed_minutes(s: SleepSession) -> float:
         """Einschlafzeit als Minuten ab 12 Uhr mittags (Ortszeit), damit 23:30 und 0:30 nah beieinander liegen."""
@@ -139,9 +198,10 @@ class Context:
         if n and (n.asleep_min or 0) > 60:
             asleep = n.asleep_min
             in_bed = max(asleep, (n.end - n.start).total_seconds() / 60)
-            ratio = asleep / self.sleep_need
+            need = self.need(d)["need"]
+            ratio = asleep / need
             parts = [{"key": "duration", "label": "Dauer", "weight": 45, "score": _clamp((ratio - 0.5) / 0.5 * 100),
-                      "text": f"{int(asleep // 60)}:{int(asleep % 60):02d} h von {int(self.sleep_need // 60)}:{int(self.sleep_need % 60):02d} h"}]
+                      "text": f"{int(asleep // 60)}:{int(asleep % 60):02d} h von {int(need // 60)}:{int(need % 60):02d} h Bedarf"}]
             if n.deep_min is not None and n.rem_min is not None:
                 share = (n.deep_min + n.rem_min) / asleep
                 parts.append({"key": "restorative", "label": "Tief + REM", "weight": 20, "score": _clamp(share / 0.4 * 100),

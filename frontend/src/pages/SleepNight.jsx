@@ -80,7 +80,7 @@ export default function SleepNight() {
           <div className="kpis">
             <Kpi label="Geschlafen" value={fmtMinutes(m.asleep_min)} sub={wk.asleep != null ? `Schnitt ${fmtMinutes(wk.asleep)}` : null} />
             <Kpi label="Im Bett" value={fmtMinutes(m.in_bed_min)} />
-            <Kpi label="Bedarf" value={fmtMinutes(n.need)} sub={n.debt != null ? (n.debt > 0 ? `${fmtMinutes(n.debt)} zu wenig` : "gedeckt") : null} />
+            <Kpi label="Bedarf" value={fmtMinutes(n.need)} sub={[n.debt != null ? (n.debt > 0 ? `${fmtMinutes(n.debt)} zu wenig` : "gedeckt") : null, ...(n.need_parts || []).filter((p) => p.key !== "base").map((p) => `+${p.min} ${p.label}`)].filter(Boolean).join(" · ") || null} />
             {n.score && <Kpi label="Schlafwert" value={fmtNum(n.score.value)} sub={wk.sleep != null ? `Schnitt ${fmtNum(wk.sleep)}` : null} />}
             {m.score != null && <Kpi label={`Wert ${m.source_name}`} value={fmtNum(m.score)} />}
             {n.readiness && <Kpi label="Bereitschaft danach" value={fmtNum(n.readiness.value)} />}

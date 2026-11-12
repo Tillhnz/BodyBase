@@ -40,7 +40,7 @@ function Profile({ user, onChange }) {
 }
 
 function Goals({ user, onChange }) {
-  const g = { steps: 8000, active_minutes: 30, sleep_duration: 450, weight: null, ...(user.prefs?.goals || {}) };
+  const g = { steps: 8000, active_minutes: 30, sleep_duration: null, weight: null, ...(user.prefs?.goals || {}) };
   const [f, setF] = useState({ steps: g.steps ?? "", active_minutes: g.active_minutes ?? "", sleep_h: g.sleep_duration ? String(g.sleep_duration / 60).replace(".", ",") : "",
     weight: g.weight ?? "" });
   async function save(e) {
@@ -59,7 +59,8 @@ function Goals({ user, onChange }) {
       <div className="form-grid">
         <label>Schritte pro Tag<input inputMode="numeric" value={f.steps} onChange={(e) => setF({ ...f, steps: e.target.value })} /></label>
         <label>Aktive Minuten pro Tag<input inputMode="numeric" value={f.active_minutes} onChange={(e) => setF({ ...f, active_minutes: e.target.value })} /></label>
-        <label>Schlaf (Stunden)<input inputMode="decimal" value={f.sleep_h} onChange={(e) => setF({ ...f, sleep_h: e.target.value })} /></label>
+        <label>Schlaf-Grundbedarf (Stunden)<input inputMode="decimal" value={f.sleep_h} placeholder="nach Alter" onChange={(e) => setF({ ...f, sleep_h: e.target.value })} />
+          <small className="muted">Leer = nach Alter. Der tägliche Bedarf passt sich automatisch an Belastung, Schlafschuld und Erholung an.</small></label>
         <label>Zielgewicht (kg)<input inputMode="decimal" value={f.weight} onChange={(e) => setF({ ...f, weight: e.target.value })} placeholder="kein Ziel" /></label>
       </div>
       <div className="actions"><button className="btn primary">Speichern</button></div>

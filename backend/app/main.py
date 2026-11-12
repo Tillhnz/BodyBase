@@ -34,6 +34,8 @@ async def lifespan(app: FastAPI):
     from . import updatewatch
     if settings.background_jobs:
         updatewatch.start_background()
+        from . import reminders
+        reminders.start_background()
     yield
 
 

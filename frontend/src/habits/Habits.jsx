@@ -7,6 +7,7 @@ import ExercisePicker from "../strength/ExercisePicker.jsx";
 import { useExercises } from "../strength/shared.js";
 import { HabitRow } from "./HabitsToday.jsx";
 import HabitYear from "./HabitYear.jsx";
+import Reminder from "./Reminder.jsx";
 
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const COLORS = ["var(--c-recovery)", "var(--c-activity)", "var(--c-heart)", "var(--c-body)", "var(--c-sleep)", "var(--c-nutrition)"];
@@ -33,6 +34,7 @@ export default function Habits() {
           <button className="btn primary" onClick={() => setEdit({})}>Neue Gewohnheit</button>
         </div>
       </div>
+      <Reminder />
       {!items ? <Loading rows={2} /> : !items.length ? (
         <EmptyState title="Noch keine Gewohnheit" text="Lege zum Beispiel „Liegestütze“ an: Start mit 20 am Tag, jede Woche 5 mehr.">
           <button className="btn primary" onClick={() => setEdit({ name: "Liegestütze", target: 20, increment: 5, unit: "Wdh." })}>Liegestütze anlegen</button>
