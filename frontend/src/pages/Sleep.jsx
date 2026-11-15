@@ -64,11 +64,45 @@ function SleepBars({ nights, goal }) {
   );
 }
 
-function Tonight() {
+function NeedChart({ history }) {
+  const [ref, width] = useWidth(700);
+  const H = 150, L = 34, R = 6, T = 8, B = 20;
+  const vals = history.flatMap((h) => [h.need, h.asleep || 0]);
+  const hi = Math.ceil((Math.max(...vals, 480) + 30) / 60) * 60, lo = Math.max(0, Math.floor((Math.min(...vals.filter(Boolean), 360) - 60) / 60) * 60);
+  const n = history.length, step = (width - L - R) / n;
+  const x = (i) => L + i * step + step / 2;
+  const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const bw = Math.max(1.5, Math.min(18, step * 0.62));
+  const needPath = history.map((h, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(h.need).toFixed(1)}`).join("");
+  const pts = history.map((h, i) => (h.asleep ? [x(i), y(h.asleep)] : null));
+  let sleptPath = "";
+  pts.forEach((p, i) => { if (p) sleptPath += `${sleptPath && pts[i - 1] ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`; });
+  const ticks = [];
+  for (let v = lo; v <= hi; v += 60) ticks.push(v);
+  const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(width / 64))));
+  return (
+    <div ref={ref} className="need-chart">
+      <svg width={width} height={H} role="img" aria-label="Schlafbedarf und Schlafdauer je Nacht">
+        {ticks.map((v) => <g key={v}><line x1={L} x2={width - R} y1={y(v)} y2={y(v)} className="rp-grid" /><text x={L - 6} y={y(v) + 4} textAnchor="end" className="rp-tick">{v / 60} h</text></g>)}
+        {history.map((h, i) => h.asleep ? (
+          <rect key={h.day} x={x(i) - bw / 2} y={y(h.asleep)} width={bw} height={Math.max(0, H - B - y(h.asleep))} rx={Math.min(3, bw / 2)}
+            className={`need-bar${h.asleep >= h.need ? " ok" : ""}`}><title>{`${fmtDay(h.day)}: ${fmtMinutes(h.asleep)} geschlafen, Bedarf ${fmtMinutes(h.need)}`}</title></rect>
+        ) : null)}
+        {n <= 60 && <path d={sleptPath} className="need-slept" />}
+        <path d={needPath} className="need-line" />
+        {history.map((h, i) => (i % every === 0 ? <text key={h.day} x={x(i)} y={H - 4} textAnchor="middle" className="rp-tick">{h.day.slice(8, 10)}.{h.day.slice(5, 7)}.</text> : null))}
+      </svg>
+      <div className="need-legend tiny muted"><span><i className="lg-bar" />geschlafen</span><span><i className="lg-need" />Bedarf</span>{n <= 60 && <span><i className="lg-slept" />Verlauf</span>}</div>
+    </div>
+  );
+}
+
+function Tonight({ days }) {
   const v = useDataVersion();
-  const [{ data: n }] = useAsync(() => api.get("/sleep/need"), [v]);
-  if (!n) return null;
-  const max = Math.max(...n.history.map((h) => Math.max(h.need, h.asleep || 0)), 1);
+  const [{ data: n }] = useAsync(() => api.get(`/sleep/need?days=${days}`), [days, v]);
+  if (!n) return <section className="panel tonight"><Loading rows={1} /></section>;
+  const shown = n.history.filter((h) => h.asleep);
+  const debt = shown.reduce((s, h) => s + Math.max(0, h.need - h.asleep), 0);
   return (
     <section className="panel tonight">
       <div className="tonight-main">
@@ -83,15 +117,10 @@ function Tonight() {
           ))}
         </ul>
       </div>
-      <div className="tonight-hist" aria-label="Bedarf und Schlaf der letzten 14 Nächte">
-        {n.history.map((h) => (
-          <div key={h.day} title={`${h.day}: Bedarf ${fmtMinutes(h.need)}, geschlafen ${h.asleep ? fmtMinutes(h.asleep) : "–"}`}>
-            <i className={`slept${h.asleep && h.asleep >= h.need ? " ok" : ""}`} style={{ height: `${((h.asleep || 0) / max) * 100}%` }} />
-            <i className="needline" style={{ bottom: `${(h.need / max) * 100}%` }} />
-          </div>
-        ))}
-      </div>
-      <p className="tiny muted" style={{ margin: 0 }}>Grundbedarf {n.custom_base ? "aus deinen Einstellungen" : "nach Alter"}, plus Belastung vom Vortag, ein Teil der Schlafschuld der letzten Woche und mehr, wenn HRV, Ruhepuls oder Atmung auf fehlende Erholung deuten. Balken: geschlafen, Strich: Bedarf.</p>
+      <div className="panel-head" style={{ margin: 0 }}><h3 className="sub-h" style={{ margin: 0 }}>Bedarf und Schlaf</h3>
+        <span className="tiny muted">{shown.length ? `${shown.filter((h) => h.asleep >= h.need).length} von ${shown.length} Nächten gedeckt · ${fmtMinutes(debt)} Fehlbetrag gesamt` : "keine Nächte im Zeitraum"}</span></div>
+      <NeedChart history={n.history} />
+      <p className="tiny muted" style={{ margin: 0 }}>Grundbedarf {n.custom_base ? "aus deinen Einstellungen" : "nach Alter"}, plus Belastung vom Vortag, ein Teil der Schlafschuld der letzten Woche und mehr, wenn HRV, Ruhepuls oder Atmung auf fehlende Erholung deuten.</p>
     </section>
   );
 }
@@ -109,13 +138,13 @@ export default function Sleep() {
         <div><h1>Schlaf</h1><p>Pro Nacht zählt die bevorzugte Quelle. Nickerchen bleiben außen vor.</p></div>
         <Segmented value={days} onChange={setDays} options={RANGES} label="Zeitraum" />
       </div>
+      <Tonight days={days} />
       {!nights.length ? (
         <EmptyState title="Noch keine Schlafdaten" text="Oura, WHOOP, Garmin, Fitbit, Withings, Polar oder Apple Health liefern Schlafphasen.">
           <Link className="btn primary" to="/sources">Quellen</Link>
         </EmptyState>
       ) : (
         <>
-          <Tonight />
           <div className="kpis">
             <Kpi label="Ø Schlafdauer" value={fmtMinutes(avg.asleep_min)} sub={data.goal ? `Ziel ${fmtMinutes(data.goal)}` : null} />
             {avg.deep_min != null && <Kpi label="Ø Tiefschlaf" value={fmtMinutes(avg.deep_min)} sub={avg.asleep_min ? `${fmtNum((avg.deep_min / avg.asleep_min) * 100)} % der Nacht` : null} />}

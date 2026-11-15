@@ -46,3 +46,24 @@ def test_dynamic_sleep_need(client):
     r = client.get("/api/sleep/need", headers=headers).json()
     assert r["need"] > 480 and any(p["key"] == "debt" for p in r["parts"])
     assert r["need"] <= 600 and len(r["history"]) == 14 and "bedtime" in r
+
+
+def test_coach_recent_changes_sleep_debt(client):
+    headers, _ = register(client)
+    me = client.get("/api/me", headers=headers).json()
+    from app.database import SessionLocal
+    from app.models import SleepSession
+    with SessionLocal() as db:
+        for i in range(1, 30):
+            d = date.today() - timedelta(days=i)
+            end = datetime.combine(d, datetime.min.time()) + timedelta(hours=7)
+            mins = 330 if i <= 7 else 470
+            db.add(SleepSession(user_id=me["id"], source="files", source_id=f"c{i}", day=d, start=end - timedelta(minutes=mins + 10),
+                                end=end, asleep_min=mins))
+        db.commit()
+    items = client.get("/api/insights", headers=headers).json()
+    sleep = [x for x in items if x.get("area") == "Schlaf"]
+    assert sleep and sleep[0]["type"] == "warn" and sleep[0]["advice"]
+    assert client.get("/api/sleep/need?days=30", headers=headers).json()["history"].__len__() == 30
+    stats = client.get("/api/activities/stats?days=30", headers=headers).json()
+    assert len(stats["load"]) == 30

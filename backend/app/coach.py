@@ -143,7 +143,16 @@ def insights(db: Session, user_id: int, today: date) -> list[dict]:
         pass
     order = {"warn": 0, "tip": 1, "good": 2}
     out.sort(key=lambda x: order[x["type"]])
-    return out[:8]
+    try:
+        from .models import User
+        recent = recent_changes(db, db.get(User, user_id), today)
+    except Exception:  # noqa: BLE001 - Hinweise dürfen nie die Startseite blockieren
+        recent = []
+    # Gesamtbild zuerst, dann Warnungen, Tipps, Lob; Trainings-Hinweise mit Kategorie
+    for x in out:
+        x.setdefault("area", "Kraft" if x.get("exercises") or x.get("group") else "Gewohnheiten" if x.get("habit_id") else "Training")
+    allx = recent[:1] + sorted(recent[1:] + out, key=lambda x: order[x["type"]]) if recent and recent[0].get("area") == "Gesamtbild" else sorted(recent + out, key=lambda x: order[x["type"]])
+    return allx[:12]
 
 
 def _fmt(v) -> str:
@@ -161,3 +170,173 @@ def _strength_week_streak(db: Session, user_id: int, today: date) -> int:
         n += 1
         wk -= timedelta(weeks=1)
     return n
+
+
+# ---------- Jüngste Veränderungen über alle Bereiche ----------
+
+def _avg(vals):
+    vals = [v for v in vals if v is not None]
+    return sum(vals) / len(vals) if vals else None
+
+
+def _split(db: Session, user, metric: str, today: date, recent: int = 7, base: int = 28):
+    """Mittel der letzten `recent` Tage und der `base` Tage davor (ohne heute, der Tag läuft noch)."""
+    from .store import daily_series
+    end = today - timedelta(days=1)
+    rows = {r["day"]: r["value"] for r in daily_series(db, user, metric, end - timedelta(days=recent + base - 1), end)}
+    days = [(end - timedelta(days=i)).isoformat() for i in range(recent + base)]
+    a = [rows.get(d) for d in days[:recent]]
+    b = [rows.get(d) for d in days[recent:]]
+    if sum(v is not None for v in a) < 3 or sum(v is not None for v in b) < 7:
+        return None, None
+    return _avg(a), _avg(b)
+
+
+def _hm(minutes: float) -> str:
+    m = round(abs(minutes))
+    return f"{m // 60}:{m % 60:02d} h" if m >= 60 else f"{m} min"
+
+
+def recent_changes(db: Session, user, today: date) -> list[dict]:
+    """Was hat sich in der letzten Woche gegenüber den vier Wochen davor verändert, was bedeutet das, was tun?"""
+    from .scores import Context
+    out: list[dict] = []
+    signals = {"sleep_short": False, "recovery_low": False, "load_high": False, "load_low": False}
+
+    # --- Schlaf ---
+    ctx = Context(db, user, today - timedelta(days=40), today)
+    nights = [(today - timedelta(days=i)) for i in range(1, 8)]
+    slept = [ctx.nights[d].asleep_min for d in nights if d in ctx.nights and ctx.nights[d].asleep_min]
+    if len(slept) >= 4:
+        needs = [ctx.need(d)["need"] for d in nights if d in ctx.nights and ctx.nights[d].asleep_min]
+        debt = sum(max(0, n - s) for n, s in zip(needs, slept))
+        a, b = _split(db, user, "sleep_duration", today)
+        trend = f" ({'+' if a - b >= 0 else '−'}{_hm(a - b)} gegenüber den Wochen davor)" if a and b and abs(a - b) >= 10 else ""
+        if debt >= 150:
+            signals["sleep_short"] = True
+            out.append({"type": "warn", "area": "Schlaf", "title": f"{_hm(debt)} Schlafschuld in 7 Nächten",
+                        "text": f"Im Schnitt {_hm(_avg(slept))} pro Nacht bei einem Bedarf von {_hm(_avg(needs))}{trend}. "
+                                "Fehlender Schlaf bremst Erholung, Muskelaufbau und Appetitregulation.",
+                        "advice": "Die nächsten 3 Nächte je 30–45 min früher ins Bett; harte Einheiten erst danach.", "link": "/sleep"})
+        elif debt <= 45:
+            out.append({"type": "good", "area": "Schlaf", "title": "Schlafbedarf gedeckt",
+                        "text": f"Durchschnittlich {_hm(_avg(slept))} pro Nacht{trend} – genug für deine Belastung.",
+                        "advice": "Gute Basis für intensivere Einheiten.", "link": "/sleep"})
+        bt = [ctx.nights[d].start for d in nights if d in ctx.nights and ctx.nights[d].start]
+        if len(bt) >= 5:
+            mins = [((t.hour * 60 + t.minute) + 720) % 1440 for t in bt]
+            sd = (sum((m - _avg(mins)) ** 2 for m in mins) / (len(mins) - 1)) ** 0.5
+            if sd > 60:
+                out.append({"type": "tip", "area": "Schlaf", "title": "Unregelmäßige Schlafenszeiten",
+                            "text": f"Deine Einschlafzeit schwankte diese Woche um rund ±{round(sd)} min. Ein unruhiger Rhythmus verschlechtert die Schlafqualität, auch bei gleicher Dauer.",
+                            "advice": "Feste Zubettgehzeit, auch am Wochenende höchstens 1 h später.", "link": "/sleep"})
+
+    # --- Erholung ---
+    h7, h28 = _split(db, user, "hrv", today)
+    r7, r28 = _split(db, user, "resting_hr", today)
+    parts = []
+    if h7 and h28:
+        hc = (h7 - h28) / h28
+        if hc <= -0.08:
+            parts.append(f"HRV {round(-hc * 100)} % niedriger")
+        elif hc >= 0.08:
+            parts.append(f"HRV {round(hc * 100)} % höher")
+    if r7 and r28 and abs(r7 - r28) >= 2:
+        parts.append(f"Ruhepuls {'+' if r7 > r28 else '−'}{round(abs(r7 - r28))} bpm")
+    if parts:
+        worse = (h7 and h28 and h7 < h28 * 0.92) or (r7 and r28 and r7 >= r28 + 2)
+        signals["recovery_low"] = bool(worse)
+        out.append({"type": "warn" if worse else "good", "area": "Erholung",
+                    "title": "Erholung lässt nach" if worse else "Bessere Erholung",
+                    "text": ", ".join(parts) + " als in den vier Wochen davor. "
+                            + ("Das Nervensystem steht unter mehr Stress – durch Training, wenig Schlaf, Alkohol, Infekt oder Alltag."
+                               if worse else "Dein Körper verkraftet die aktuelle Belastung gut."),
+                    "advice": "Ein bis zwei lockere Tage, viel trinken, früh schlafen; bei Krankheitsgefühl ganz pausieren." if worse
+                    else "Guter Zeitpunkt, die Belastung behutsam zu steigern.", "link": "/health"})
+
+    # --- Belastung ---
+    acwr = ctx.acwr(today - timedelta(days=1))
+    if acwr is not None:
+        if acwr >= 1.4:
+            signals["load_high"] = True
+            out.append({"type": "warn", "area": "Belastung", "title": f"Belastung stark gestiegen ({acwr:.1f}×)".replace(".", ","),
+                        "text": "Die letzte Woche war deutlich härter als dein Schnitt der vier Wochen davor. Sprünge über das 1,3-Fache erhöhen das Verletzungs- und Überlastungsrisiko.",
+                        "advice": "Diese Woche nicht weiter steigern; eine Einheit durch lockere Ausdauer ersetzen.", "link": "/activities"})
+        elif acwr <= 0.7:
+            signals["load_low"] = True
+            out.append({"type": "tip", "area": "Belastung", "title": "Deutlich weniger Training als üblich",
+                        "text": f"Nur etwa {round(acwr * 100)} % deiner üblichen Wochenbelastung. Nach 2–3 Wochen beginnt die Fitness spürbar zu sinken.",
+                        "advice": "Wenn es keine geplante Pause ist: zwei kurze Einheiten fest einplanen.", "link": "/activities"})
+        elif 0.9 <= acwr <= 1.3:
+            out.append({"type": "good", "area": "Belastung", "title": "Belastung im grünen Bereich",
+                        "text": f"Die letzte Woche lag beim {acwr:.1f}-Fachen deines Schnitts – genug Reiz ohne Überlastung.".replace(".", ",", 1),
+                        "link": "/activities"})
+
+    # Sportarten-Verschiebung
+    acts = db.execute(select(Activity.sport, Activity.day, Activity.moving_s, Activity.duration_s).where(
+        Activity.user_id == user.id, Activity.duplicate_of.is_(None), Activity.day >= today - timedelta(days=35), Activity.day < today)).all()
+    if acts:
+        from .sports import SPORTS
+        cur, prev = {}, {}
+        for sport, d, mv, du in acts:
+            m = (mv or du or 0) / 60
+            tgt = cur if d >= today - timedelta(days=7) else prev
+            tgt[sport] = tgt.get(sport, 0) + m
+        for sport in set(cur) | set(prev):
+            c, p = cur.get(sport, 0), prev.get(sport, 0) / 4
+            if sport != "walk" and p >= 45 and c < p * 0.3:
+                out.append({"type": "tip", "area": "Aktivität", "title": f"Kaum noch {SPORTS.get(sport, sport)}",
+                            "text": f"Diese Woche {round(c)} min statt sonst etwa {round(p)} min pro Woche.",
+                            "advice": "Bewusst pausiert? Sonst eine kurze Einheit einplanen, damit die Gewöhnung nicht verloren geht."})
+            elif sport != "walk" and c >= 60 and c > max(p, 20) * 2:
+                out.append({"type": "good", "area": "Aktivität", "title": f"Mehr {SPORTS.get(sport, sport)}",
+                            "text": f"{round(c)} min diese Woche, sonst etwa {round(p)} min pro Woche.",
+                            "advice": "Neue Reize lieber über 2–3 Wochen steigern, damit Sehnen und Gelenke mitkommen."})
+
+    s7, s28 = _split(db, user, "steps", today)
+    if s7 and s28 and abs(s7 - s28) / s28 >= 0.2:
+        up = s7 > s28
+        out.append({"type": "good" if up else "tip", "area": "Aktivität",
+                    "title": f"{'Mehr' if up else 'Weniger'} Schritte: {round(s7):,} statt {round(s28):,} am Tag".replace(",", "."),
+                    "text": "Alltagsbewegung zählt für Herz und Stoffwechsel fast so viel wie Training." if not up else "Mehr Alltagsbewegung verbessert Erholung und Stoffwechsel.",
+                    "advice": None if up else "Kurze Spaziergänge nach dem Essen oder Telefonate im Gehen."})
+
+    # --- Ernährung ---
+    k7, k28 = _split(db, user, "calories_in", today)
+    p7, _ = _split(db, user, "protein", today)
+    w7, w28 = _split(db, user, "weight", today, 7, 21)
+    if k7 and k28 and abs(k7 - k28) >= 200:
+        out.append({"type": "tip", "area": "Ernährung", "title": f"{'Mehr' if k7 > k28 else 'Weniger'} gegessen: {round(k7)} statt {round(k28)} kcal",
+                    "text": ("Weniger Energie bei gleicher oder höherer Belastung bremst Erholung und Leistung."
+                             if k7 < k28 and (signals["load_high"] or signals["recovery_low"]) else
+                             "Die Energiezufuhr hat sich spürbar verändert" + (f"; das Gewicht {'steigt' if w7 > w28 else 'sinkt'} um {abs(w7 - w28):.1f} kg.".replace(".", ",", 1) if w7 and w28 and abs(w7 - w28) >= 0.4 else ".")),
+                    "advice": "An harten Tagen mehr Kohlenhydrate, an ruhigen Tagen weniger." , "link": "/metric/calories_in"})
+    if p7:
+        w = w7 or w28
+        if w:
+            gpk = p7 / w
+            trains = bool(acts) or db.scalar(select(func.count()).select_from(Workout).where(Workout.user_id == user.id, Workout.day >= today - timedelta(days=14)))
+            if trains and gpk < 1.4:
+                out.append({"type": "tip", "area": "Ernährung", "title": f"Wenig Eiweiß: {gpk:.1f} g/kg".replace(".", ","),
+                            "text": f"Im Schnitt {round(p7)} g pro Tag. Für Training und Muskelerhalt empfehlen Studien 1,6–2,2 g pro kg Körpergewicht.",
+                            "advice": f"Ziel etwa {round(w * 1.6)} g: zu jeder Mahlzeit eine Eiweißquelle (Quark, Eier, Hülsenfrüchte, Fisch).", "link": "/metric/calories_in"})
+            elif trains and gpk >= 1.6:
+                out.append({"type": "good", "area": "Ernährung", "title": f"Eiweiß passt: {gpk:.1f} g/kg".replace(".", ","),
+                            "text": "Genug für Muskelaufbau und Erholung.", "link": "/metric/calories_in"})
+    wa7, wa28 = _split(db, user, "water", today)
+    if wa7 and wa7 < 1500 and (signals["load_high"] or signals["recovery_low"]):
+        out.append({"type": "tip", "area": "Ernährung", "title": "Wenig getrunken",
+                    "text": f"Nur etwa {wa7 / 1000:.1f} l am Tag bei hoher Belastung.".replace(".", ","),
+                    "advice": "2–3 l, an Trainingstagen etwas mehr."})
+
+    # --- Gesamtbild ---
+    if signals["load_high"] and (signals["recovery_low"] or signals["sleep_short"]):
+        out.insert(0, {"type": "warn", "area": "Gesamtbild", "title": "Mehr Belastung als Erholung",
+                       "text": "Die Belastung ist gestiegen, während " + (" und ".join(x for x, f in [("die Erholungswerte sinken", signals["recovery_low"]), ("Schlaf fehlt", signals["sleep_short"])] if f))
+                               + ". Diese Kombination geht einer Überlastung oder einem Infekt oft voraus.",
+                       "advice": "2–3 Tage nur locker, Schlaf nachholen, dann neu bewerten."})
+    elif signals["sleep_short"] and signals["recovery_low"]:
+        out.insert(0, {"type": "warn", "area": "Gesamtbild", "title": "Schlaf fehlt und die Erholung leidet",
+                       "text": "Kurzer Schlaf und sinkende HRV hängen eng zusammen – das Training ist hier nicht die Ursache.",
+                       "advice": "Schlaf zuerst: früher ins Bett, Bildschirme und Alkohol abends reduzieren."})
+    return out

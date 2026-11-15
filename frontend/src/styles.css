@@ -1409,3 +1409,39 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px color-mix(in s
 }
 
 
+
+/* Coach: Bereich und Empfehlung */
+.coach-area { display: inline-block; margin-bottom: 0.2rem; padding: 0.05rem 0.5rem; border-radius: 99px; font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.02em; text-transform: uppercase; color: var(--mute); background: color-mix(in srgb, var(--mute) 14%, transparent); }
+.coach-area.area-Schlaf { color: var(--c-sleep); background: color-mix(in srgb, var(--c-sleep) 15%, transparent); }
+.coach-area.area-Erholung { color: var(--c-recovery); background: color-mix(in srgb, var(--c-recovery) 15%, transparent); }
+.coach-area.area-Belastung, .coach-area.area-Aktivität { color: var(--c-activity); background: color-mix(in srgb, var(--c-activity) 15%, transparent); }
+.coach-area.area-Ernährung { color: var(--c-nutrition); background: color-mix(in srgb, var(--c-nutrition) 15%, transparent); }
+.coach-area.area-Gesamtbild { color: var(--signal); background: color-mix(in srgb, var(--signal) 15%, transparent); }
+.coach-item .coach-area + strong { display: block; }
+.coach-advice { margin: 0.3rem 0 0.2rem; padding: 0.45rem 0.65rem; border-radius: 10px; font-size: 0.86rem;
+  background: color-mix(in srgb, var(--panel) 60%, transparent); border: 1px solid var(--line); }
+
+/* Schlafbedarf gegenüber Schlaf */
+.need-chart { width: 100%; }
+.need-bar { fill: color-mix(in srgb, var(--c-sleep) 38%, transparent); }
+.need-bar.ok { fill: color-mix(in srgb, var(--c-sleep) 80%, transparent); }
+.need-line { fill: none; stroke: var(--chalk); stroke-width: 2; stroke-dasharray: 5 4; stroke-linejoin: round; opacity: 0.85; }
+.need-slept { fill: none; stroke: var(--c-sleep); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.need-legend { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.need-legend i { display: inline-block; width: 14px; height: 8px; margin-right: 0.35rem; border-radius: 2px; vertical-align: middle; }
+.need-legend .lg-bar { background: color-mix(in srgb, var(--c-sleep) 60%, transparent); }
+.need-legend .lg-need { height: 0; border-top: 2px dashed var(--chalk); border-radius: 0; }
+.need-legend .lg-slept { height: 0; border-top: 2px solid var(--c-sleep); border-radius: 0; }
+
+/* Glas auch für die neuen Bausteine (Coach, Schlafbedarf, Bio-Alter, Gewohnheiten-Jahr, Erinnerung) */
+.coach-item { border-radius: 16px; padding: 0.7rem 0.8rem; background: var(--panel-2); border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 var(--glass-hi); }
+.coach-advice { background: var(--ink-2); border-color: var(--line-2); box-shadow: inset 0 1px 0 var(--glass-hi); }
+.tonight-parts li, .bio-levers li { padding: 0.4rem 0.6rem; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+.bio-factor { padding: 0.75rem 0.85rem; border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line); box-shadow: inset 0 1px 0 var(--glass-hi); }
+.bio-factor:last-child { padding-bottom: 0.75rem; border-bottom: 1px solid var(--line); }
+.bio-hero { background: linear-gradient(140deg, color-mix(in srgb, var(--iris) 16%, var(--panel)), var(--panel)); }
+.tonight { background: linear-gradient(140deg, color-mix(in srgb, var(--c-sleep) 14%, var(--panel)), var(--panel)); }
+.hy-edit { padding: 0.7rem; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line-2); }
+.update-toast { background: var(--glass-strong); border-color: var(--line-2); box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow); }

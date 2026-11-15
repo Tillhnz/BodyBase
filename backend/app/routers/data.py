@@ -215,15 +215,15 @@ def report_month(month: str | None = None, user: User = Depends(current_user), d
 
 
 @router.get("/sleep/need")
-def sleep_need(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def sleep_need(days: int = Query(14, ge=7, le=365), user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Schlafbedarf für die kommende Nacht, mit Begründung und empfohlener Schlafenszeit."""
     from datetime import timezone as _tz
 
     from ..scores import Context
     from ..timeutil import tz as _zone
     t = today()
-    ctx = Context(db, user, t - timedelta(days=35), t + timedelta(days=1))
-    out = ctx.need(t + timedelta(days=1))
+    ctx = Context(db, user, t - timedelta(days=max(35, days + 10)), t + timedelta(days=1))
+    out = dict(ctx.need(t + timedelta(days=1)))
     wakes = []
     for d, n in ctx.nights.items():
         if d > t - timedelta(days=15) and n.end:
@@ -237,7 +237,7 @@ def sleep_need(user: User = Depends(current_user), db: Session = Depends(get_db)
         out["bedtime"] = f"{bed // 60:02d}:{bed % 60:02d}"
     history = [{"day": (t - timedelta(days=i)).isoformat(), "need": ctx.need(t - timedelta(days=i))["need"],
                 "asleep": round(ctx.nights[t - timedelta(days=i)].asleep_min) if (t - timedelta(days=i)) in ctx.nights and ctx.nights[t - timedelta(days=i)].asleep_min else None}
-               for i in range(13, -1, -1)]
+               for i in range(days - 1, -1, -1)]
     out["history"] = history
     return out
 
@@ -341,10 +341,16 @@ def activity_stats(days: int = Query(365, ge=7, le=3650), user: User = Depends(c
     e = today()
     s = e - timedelta(days=days - 1)
     from .. import scores
-    acts = db.scalars(select(Activity).where(
-        Activity.user_id == user.id, Activity.duplicate_of.is_(None), Activity.day >= s, Activity.day <= e)).all()
+    warm = s - timedelta(days=90)  # Vorlauf, damit Fitness/Ermüdung am Anfang des Zeitraums schon eingeschwungen sind
+    acts_all = db.scalars(select(Activity).where(
+        Activity.user_id == user.id, Activity.duplicate_of.is_(None), Activity.day >= warm, Activity.day <= e)).all()
+    acts = [a for a in acts_all if a.day >= s]
     ctx = scores.Context(db, user, e - timedelta(days=30), e)
     rows = [(a.day, a.sport, a.duration_s, a.moving_s, a.distance_m, a.calories, ctx.activity_load(a)) for a in acts]
+    pre_load: dict = defaultdict(float)
+    for a in acts_all:
+        if a.day < s:
+            pre_load[a.day] += ctx.activity_load(a)
     by_day: dict = defaultdict(float)
     by_sport: dict = defaultdict(lambda: {"count": 0, "minutes": 0.0, "distance_km": 0.0, "calories": 0.0})
     by_week: dict = defaultdict(lambda: defaultdict(float))
@@ -362,8 +368,13 @@ def activity_stats(days: int = Query(365, ge=7, le=3650), user: User = Depends(c
         load_day[day] += load  # Trainingslast (TRIMP) wie bei der Auslastung
     # Fitness (CTL, 42 Tage) und Ermüdung (ATL, 7 Tage) als exponentiell gleitende Mittel der Tagesbelastung
     ctl = atl = 0.0
+    d = warm
+    while d < s:
+        x = pre_load.get(d, 0.0)
+        ctl += (x - ctl) / 42
+        atl += (x - atl) / 7
+        d += timedelta(days=1)
     form = []
-    d = s
     while d <= e:
         x = load_day.get(d, 0.0)
         ctl += (x - ctl) / 42
@@ -377,7 +388,7 @@ def activity_stats(days: int = Query(365, ge=7, le=3650), user: User = Depends(c
                           for k, v in by_sport.items()), key=lambda x: -x["minutes"]),
         "weeks": [{"week": k, "sports": {sp: round(m) for sp, m in v.items()}, "minutes": round(sum(v.values()))}
                   for k, v in sorted(by_week.items())],
-        "load": form[-120:],
+        "load": form[-730:],  # passt sich dem Zeitraum an (bei sehr langen Zeiträumen die letzten 2 Jahre)
     }
 
 

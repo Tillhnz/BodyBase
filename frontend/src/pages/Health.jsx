@@ -5,7 +5,7 @@ import { useDataVersion } from "../refresh.js";
 import EntryDialog from "../components/EntryDialog.jsx";
 import Segments from "../components/Segments.jsx";
 import { Loading } from "../components/feedback.jsx";
-import { EmptyState, MetricCard, useAsync } from "../components/ui.jsx";
+import { EmptyState, Segmented, MetricCard, useAsync } from "../components/ui.jsx";
 import { CATEGORY_ORDER, useMeta } from "../meta.js";
 
 const INTRO = {
@@ -24,11 +24,12 @@ export default function Health() {
   const cat = params.get("c") || "body";
   const [entry, setEntry] = useState(false);
   const [reload, setReload] = useState(0);
+  const [days, setDays] = useState(30);
   const v = useDataVersion();
   const [{ data: overview }] = useAsync(() => api.get("/overview"), [reload, v]);
   const keys = meta ? meta.metrics.filter((m) => m.category === cat && overview?.metrics[m.key]).map((m) => m.key) : [];
-  const [{ data: summary, loading }] = useAsync(() => (keys.length ? api.get(`/summary?keys=${keys.join(",")}&days=30`) : Promise.resolve([])),
-    [keys.join(","), reload, v]);
+  const [{ data: summary, loading }] = useAsync(() => (keys.length ? api.get(`/summary?keys=${keys.join(",")}&days=${days}`) : Promise.resolve([])),
+    [keys.join(","), reload, v, days]);
   if (!meta || !overview) return <Loading rows={2} />;
   const missing = meta.metrics.filter((m) => m.category === cat && !overview.metrics[m.key]);
   const counts = Object.fromEntries(CATEGORY_ORDER.map((c) => [c, meta.metrics.filter((m) => m.category === c && overview.metrics[m.key]).length]));
@@ -37,6 +38,7 @@ export default function Health() {
       <div className="page-head">
         <div><h1>Gesundheit</h1><p>{INTRO[cat]}</p></div>
         <div className="actions">
+          <Segmented value={days} onChange={setDays} label="Zeitraum" options={[{ value: 7, label: "7 T" }, { value: 30, label: "30 T" }, { value: 90, label: "90 T" }, { value: 365, label: "1 J" }]} />
           <Link className="btn" to="/trends">Vergleichen</Link>
           <button className="btn primary" onClick={() => setEntry(true)}>Wert eintragen</button>
         </div>
