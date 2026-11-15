@@ -4,7 +4,7 @@ Bewusst einfache, nachvollziehbare Regeln. Jede Aussage nennt ihren Grund, damit
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -300,6 +300,41 @@ def recent_changes(db: Session, user, today: date) -> list[dict]:
                     "title": f"{'Mehr' if up else 'Weniger'} Schritte: {round(s7):,} statt {round(s28):,} am Tag".replace(",", "."),
                     "text": "Alltagsbewegung zählt für Herz und Stoffwechsel fast so viel wie Training." if not up else "Mehr Alltagsbewegung verbessert Erholung und Stoffwechsel.",
                     "advice": None if up else "Kurze Spaziergänge nach dem Essen oder Telefonate im Gehen."})
+
+    # --- Bildschirmzeit ---
+    st7, st28 = _split(db, user, "screen_time", today)
+    if st7:
+        from .models import Sample
+        from .timeutil import tz as _tz
+        rows = db.execute(select(Sample.ts, Sample.value).where(Sample.user_id == user.id, Sample.metric == "screen_time",
+                                                                Sample.ts >= datetime.combine(today - timedelta(days=8), time()), Sample.ts < datetime.combine(today, time()))).all()
+        late = 0.0
+        for ts, val in rows:
+            h = ts.replace(tzinfo=timezone.utc).astimezone(_tz()).hour
+            if h >= 22 or h < 4:
+                late += val
+        late /= 7
+        trend = f" ({'+' if st7 > st28 else '−'}{_hm(abs(st7 - st28))} zu den Wochen davor)" if st28 and abs(st7 - st28) >= 20 else ""
+        if late >= 30 and (signals["sleep_short"] or late >= 60):
+            out.append({"type": "warn" if signals["sleep_short"] else "tip", "area": "Bildschirm", "title": f"{_hm(late)} am Handy nach 22 Uhr",
+                        "text": "Spätes Handy verschiebt das Einschlafen und die innere Uhr (helles Licht, Anregung)" + (" – und dir fehlt gerade Schlaf." if signals["sleep_short"] else "."),
+                        "advice": "Ab 22 Uhr Handy weglegen oder Graustufen/Fokusmodus; Wecker außerhalb des Schlafzimmers.", "link": "/metric/screen_time"})
+        elif st28 and st7 > st28 * 1.25 and st7 - st28 >= 30:
+            out.append({"type": "tip", "area": "Bildschirm", "title": f"Mehr Bildschirmzeit: {_hm(st7)} am Tag{trend}",
+                        "text": "Mehr Zeit am Handy geht oft von Bewegung und Schlaf ab.", "advice": "Ein festes Tageslimit für die meistgenutzten Apps setzen.", "link": "/metric/screen_time"})
+        elif st28 and st7 < st28 * 0.8:
+            out.append({"type": "good", "area": "Bildschirm", "title": f"Weniger Bildschirmzeit: {_hm(st7)} am Tag{trend}", "text": "Mehr Zeit für Bewegung, Schlaf und Erholung.", "link": "/metric/screen_time"})
+
+    # --- Blutwerte ---
+    try:
+        from . import labs as L
+        ov = L.overview(db, user)
+        if ov["reports"] and date.fromisoformat(ov["reports"][0]) >= today - timedelta(days=180):
+            for x in ov["links"][:2]:
+                if x["type"] != "good":
+                    out.append({**x, "area": "Blutwerte", "link": "/health?c=blood"})
+    except Exception:  # noqa: BLE001
+        pass
 
     # --- Ernährung ---
     k7, k28 = _split(db, user, "calories_in", today)

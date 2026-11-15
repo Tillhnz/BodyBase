@@ -104,6 +104,7 @@ class Model(private val ctx: Context) {
     var lastCounts by mutableStateOf<Map<String, Int>>(emptyMap())
     var lastError by mutableStateOf<String?>(null)
     var total by mutableLongStateOf(0L)
+    var screen by mutableStateOf(false)
 
     val configured get() = prefs.url.isNotBlank() && prefs.key.isNotBlank()
     val grantedKinds get() = Kinds.ALL.filter { it.permission in granted }
@@ -124,6 +125,7 @@ class Model(private val ctx: Context) {
                     HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
             }.getOrDefault(false)
         }
+        screen = ScreenTime.granted(ctx)
         reload()
     }
 
@@ -278,6 +280,19 @@ fun MainScreen(setup: MutableState<Pair<String, String>?>) {
             }
         }
 
+        // Bildschirmzeit
+        Panel("Bildschirmzeit", "Wie lange und wie spät du am Handy bist – BodyBase setzt das in Bezug zu Schlaf und Erholung. Es wird nur die Zeit mit eingeschaltetem Bildschirm je Stunde gesendet, keine Apps.") {
+            if (m.screen) StatusLine(true, "Freigegeben – wird bei jedem Abgleich mitgeschickt.")
+            else StatusLine(null, "Android verlangt dafür die Freigabe „Zugriff auf Nutzungsdaten“. Tippe unten und schalte BodyBase Sync ein.")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PrimaryButton(if (m.screen) "Freigabe ändern" else "Freigabe erteilen") {
+                    runCatching {
+                        ctx.startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
+                    }.onFailure { runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)) } }
+                }
+            }
+        }
+
         // 3. Abgleich
         Panel("Abgleich", "Neue Werte gehen automatisch an BodyBase. Doppelt gesendete Werte ersetzen einfach die alten.") {
             Text("Automatisch", fontSize = 13.sp, color = C.Mute)
@@ -300,7 +315,7 @@ fun MainScreen(setup: MutableState<Pair<String, String>?>) {
                     Text(progress.ifBlank { "Starte …" }, color = C.Chalk, fontSize = 14.sp)
                 }
             } else {
-                PrimaryButton("Jetzt abgleichen", enabled = m.configured && m.grantedKinds.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+                PrimaryButton("Jetzt abgleichen", enabled = m.configured && (m.grantedKinds.isNotEmpty() || m.screen), modifier = Modifier.fillMaxWidth()) {
                     Sync.startNow(ctx)
                 }
             }
@@ -320,6 +335,10 @@ fun MainScreen(setup: MutableState<Pair<String, String>?>) {
                 Text("Beim letzten Abgleich", fontSize = 13.sp, color = C.Mute)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     counts.forEach { (key, n) ->
+                        if (key == ScreenTime.KEY) {
+                            Chip("Bildschirmzeit ${fmt(n.toLong())} h", Group.VITALS.color, true)
+                            return@forEach
+                        }
                         val k = Kinds.byKey(key) ?: return@forEach
                         Chip("${k.label} ${fmt(n.toLong())}", k.group.color, true)
                     }

@@ -239,6 +239,41 @@ def factors(data: Data, end: date, age: float, sex: str, height_cm: float | None
     return out, missing
 
 
+def lab_factors(db: Session, user: User, end: date, age: float) -> tuple[list[dict], list[dict]]:
+    """Blutwerte: vollständiges PhenoAge (Levine 2018) oder einzelne Risikomarker (HbA1c, CRP, LDL, Vitamin D)."""
+    from . import labs as L
+    hist = L.history(db, user)
+    cutoff = end - timedelta(days=548)
+    cur = {k: h[-1]["value"] for k, h in hist.items() if h and date.fromisoformat(h[-1]["day"]) >= cutoff and date.fromisoformat(h[-1]["day"]) <= end}
+    if not cur:
+        return [], [{"key": "labs", "label": "Blutwerte", "how": "Laborbefund als PDF unter Gesundheit → Blutwerte hochladen"}]
+    last = max(date.fromisoformat(hist[k][-1]["day"]) for k in cur)
+    pheno = L.phenoage(cur, age - (end - last).days / 365)
+    if pheno:
+        d = pheno - (age - (end - last).days / 365)
+        return [_f("phenoage", "Blutwerte (PhenoAge)", round(pheno, 1), "Jahre", d * GOMPERTZ,
+                   f"Aus 9 Blutwerten (Albumin, Kreatinin, Glukose, CRP, Lymphozyten, MCV, RDW, AP, Leukozyten) ergibt sich ein Blut-Alter von {pheno:.0f} Jahren – "
+                   f"{'jünger' if d < 0 else 'älter'} als dein Alter. Das ist das am besten untersuchte Bluttest-Altersmodell.",
+                   "Levine 2018", None, {"norm": round(age)})], []
+    out = []
+    if cur.get("hba1c") is not None:
+        a = cur["hba1c"]
+        out.append(_f("hba1c", "HbA1c", round(a, 1), "%", 0.18 * max(0, a - 5.4), "Im günstigen Bereich." if a <= 5.4 else "Der Langzeit-Blutzucker ist erhöht – ein starker Risikofaktor für Herz und Gefäße.",
+                      "Selvin 2010 (NEJM)"))
+    if cur.get("crp") is not None:
+        c = cur["crp"]
+        out.append(_f("crp", "CRP", round(c, 1), "mg/l", 0.12 * math.log(max(c, 1)) if c < 10 else 0.12 * math.log(3),
+                      "Kaum Entzündung." if c <= 1 else "Leicht erhöhte Entzündung, ein Herz-Kreislauf-Risikomarker." if c < 10 else "Akute Entzündung – nur begrenzt für die Schätzung genutzt.",
+                      "Emerging Risk Factors Collaboration 2010"))
+    if cur.get("ldl") is not None:
+        ld = cur["ldl"]
+        out.append(_f("ldl", "LDL-Cholesterin", round(ld), "mg/dl", 0.0024 * max(0, ld - 100), "Günstig niedrig." if ld <= 100 else "Erhöhtes LDL belastet über die Jahre die Gefäße.",
+                      "Cholesterol Treatment Trialists 2010"))
+    if cur.get("vitd") is not None and cur["vitd"] < 20:
+        out.append(_f("vitd", "Vitamin D", round(cur["vitd"]), "ng/ml", 0.2, "Mangel – hängt mit höherer Sterblichkeit zusammen.", "Schöttker 2014 (BMJ)"))
+    return out, []
+
+
 def compute(db: Session, user: User, end: date | None = None, history_months: int = 24) -> dict:
     end = end or today()
     if not user.birth_year:
@@ -246,6 +281,12 @@ def compute(db: Session, user: User, end: date | None = None, history_months: in
     data = Data(db, user, end - timedelta(days=history_months * 31 + 370), end)
     age = end.year - user.birth_year + (end.timetuple().tm_yday / 366) - 0.5
     fs, missing = factors(data, end, age, user.sex or "m", user.height_cm)
+    try:
+        lf, lm = lab_factors(db, user, end, age)
+    except Exception:  # noqa: BLE001
+        lf, lm = [], []
+    fs += lf
+    missing += lm
     if len(fs) < 3:
         return {"ready": False, "reason": "Noch zu wenige Messwerte: Es braucht mindestens drei der Bereiche Fitness, Ruhepuls, HRV, Schritte, Schlaf und Körper (je etwa zwei Wochen Daten).",
                 "missing": missing, "age": round(age, 1)}
@@ -254,10 +295,10 @@ def compute(db: Session, user: User, end: date | None = None, history_months: in
     for f in fs:
         f["impact"] = round(f["years"] * OVERLAP, 1)
     fs.sort(key=lambda f: f["impact"])
-    weights = {"vo2max": 3, "resting_hr": 2, "hrv": 1.5, "steps": 2, "training": 2, "sleep": 1.5, "body_fat": 1.5, "bmi": 1,
+    weights = {"phenoage": 3, "hba1c": 1, "crp": 0.5, "ldl": 0.5, "vo2max": 3, "resting_hr": 2, "hrv": 1.5, "steps": 2, "training": 2, "sleep": 1.5, "body_fat": 1.5, "bmi": 1,
                "waist": 1, "bp": 2, "sleep_regular": 1}
     have = sum(weights.get(f["key"], 1) for f in fs)
-    total = sum(weights.values()) - 1  # BMI und Körperfett schließen sich aus
+    total = 20.5  # alle Bereiche inkl. vollständigem Blutbild (BMI und Körperfett schließen sich aus)
     confidence = round(min(1, have / total), 2)
     levers = sorted([{"key": f["key"], "label": f["label"], "goal": f.get("goal"), "text": f["goal_text"], "years": f["goal_years"]}
                      for f in fs if f.get("goal_years") and f["goal_years"] < -0.05], key=lambda x: x["years"])[:4]

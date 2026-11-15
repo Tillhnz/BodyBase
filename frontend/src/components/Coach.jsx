@@ -7,6 +7,7 @@ const ICON = { warn: "!", tip: "→", good: "✓" };
 /** Hinweise und Lob aus den letzten zwei Wochen. */
 export default function Coach({ refreshKey, compact }) {
   const [items, setItems] = useState(null);
+  const [all, setAll] = useState(false);
   useEffect(() => { api.get("/insights").then(setItems).catch(() => setItems([])); }, [refreshKey]);
   if (!items) return null;
   return (
@@ -14,7 +15,7 @@ export default function Coach({ refreshKey, compact }) {
       <div className="panel-head"><h2>Coach</h2><span className="tiny muted">letzte Woche im Vergleich zu den Wochen davor</span></div>
       {!items.length ? <p className="muted small">Gerade gibt es nichts anzumerken.</p> : (
         <ul className="coach-list">
-          {(compact ? items.slice(0, 5) : items).map((x, i) => (
+          {(compact && !all ? items.slice(0, 3) : items).map((x, i) => (
             <li key={i} className={`coach-item ${x.type}`}>
               <span className="coach-icon" aria-hidden="true">{ICON[x.type]}</span>
               <div>
@@ -33,6 +34,9 @@ export default function Coach({ refreshKey, compact }) {
             </li>
           ))}
         </ul>
+      )}
+      {compact && items.length > 3 && (
+        <button type="button" className="btn small coach-more" onClick={() => setAll(!all)}>{all ? "Weniger anzeigen" : `Alle ${items.length} Hinweise`}</button>
       )}
     </section>
   );

@@ -149,7 +149,7 @@ object Sync {
             val client = HealthConnectClient.getOrCreate(ctx)
             val granted = client.permissionController.getGrantedPermissions()
             val kinds = Kinds.ALL.filter { it.permission in granted }
-            if (kinds.isEmpty()) throw SyncError("Noch kein Zugriff auf Health Connect erlaubt.", retry = false)
+            if (kinds.isEmpty() && !ScreenTime.granted(ctx)) throw SyncError("Noch kein Zugriff auf Health Connect erlaubt.", retry = false)
             val api = Api(prefs.url, prefs.key)
             // Ab Version mit Stundensummen: Schritte & Co. einmal neu senden, damit doppelt gezählte Rohdaten ersetzt werden
             if (!prefs.aggregatedResent) {
@@ -190,6 +190,21 @@ object Sync {
                     from = to
                 }
                 counts[kind.key] = sent
+            }
+            // Bildschirmzeit (eigene Freigabe, nicht über Health Connect); Android hebt die Ereignisse nur einige Tage auf
+            if (ScreenTime.granted(ctx)) {
+                try {
+                    val from = prefs.cursor(ScreenTime.KEY)?.minus(Duration.ofHours(26)) ?: now.minus(Duration.ofDays(7))
+                    progress.value = "Bildschirmzeit"
+                    val items = ScreenTime.hourly(ctx, maxOf(from, now.minus(Duration.ofDays(9))), now)
+                    for (part in items.chunked(CHUNK)) api.send(ScreenTime.KEY, part, aggregated = true)
+                    counts[ScreenTime.KEY] = items.count { it.optDouble("minutes") > 0 }
+                    prefs.setCursor(ScreenTime.KEY, now)
+                } catch (e: SyncError) {
+                    throw e
+                } catch (e: Exception) {
+                    problems += "Bildschirmzeit: ${e.message ?: e.javaClass.simpleName}"
+                }
             }
             prefs.lastRun = System.currentTimeMillis()
             prefs.lastCounts = counts

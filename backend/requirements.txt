@@ -12,3 +12,4 @@ cryptography>=50.0.2
 fitdecode>=0.11.0
 garminconnect>=0.3.20
 tzdata
+pypdf>=5.1.0

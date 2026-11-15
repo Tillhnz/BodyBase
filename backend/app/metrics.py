@@ -77,6 +77,7 @@ METRICS: dict[str, Metric] = {m.key: m for m in [
     Metric("body_battery", "Body Battery", "", "recovery", "max", 0, "up", 0, 100),
     Metric("stress", "Stress", "", "recovery", "avg", 0, "down", 0, 100),
     Metric("strain", "Belastung (WHOOP)", "", "recovery", "avg", 1, None, 0, 21),
+    Metric("screen_time", "Bildschirmzeit", "min", "recovery", "sum", 0, "down", 0, 1440),
     Metric("mindful_minutes", "Achtsamkeit", "min", "recovery", "sum", 0, "up", 0, 1440),
     # Ernährung
     Metric("calories_in", "Kalorienaufnahme", "kcal", "nutrition", "sum", 0, None, 0, 15000),

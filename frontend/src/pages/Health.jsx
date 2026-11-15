@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api.js";
 import { useDataVersion } from "../refresh.js";
 import EntryDialog from "../components/EntryDialog.jsx";
+import Labs from "./Labs.jsx";
 import Segments from "../components/Segments.jsx";
 import { Loading } from "../components/feedback.jsx";
 import { EmptyState, Segmented, MetricCard, useAsync } from "../components/ui.jsx";
@@ -16,6 +17,7 @@ const INTRO = {
   sleep: "Dauer, Phasen und Qualität deines Schlafs als Tageswerte.",
   nutrition: "Was du isst und trinkst, aus Ernährungs-Apps oder eigenen Eingaben.",
   metabolic: "Blutzucker aus CGM-Sensoren (Dexcom, Nightscout) oder Messgeräten.",
+  blood: "Laborbefunde: auslesen, einordnen und mit deinen Körperdaten verknüpfen.",
 };
 
 export default function Health() {
@@ -45,13 +47,13 @@ export default function Health() {
       </div>
       {cat === "body" && <Segments />}
       <div className="tabs" role="tablist">
-        {CATEGORY_ORDER.map((c) => (
+        {[...CATEGORY_ORDER, "blood"].map((c) => (
           <button key={c} role="tab" aria-selected={c === cat} className={`tab cat-${c}${c === cat ? " on" : ""}`} onClick={() => setParams({ c })}>
-            <span className="dot" />{meta.categories[c]}{counts[c] ? <span className="muted tiny">{counts[c]}</span> : null}
+            <span className="dot" />{meta.categories[c] || (c === "blood" ? "Blutwerte" : c)}{counts[c] ? <span className="muted tiny">{counts[c]}</span> : null}
           </button>
         ))}
       </div>
-      {loading && !summary ? <Loading rows={1} /> : keys.length ? (
+      {cat === "blood" ? <Labs /> : loading && !summary ? <Loading rows={1} /> : keys.length ? (
         <div className="metric-grid">
           {(summary || []).map((item) => <MetricCard key={item.key} item={item} to={`/metric/${item.key}`} />)}
         </div>
@@ -61,7 +63,7 @@ export default function Health() {
           <button className="btn primary" onClick={() => setEntry(true)}>Wert eintragen</button>
         </EmptyState>
       )}
-      {missing.length > 0 && keys.length > 0 && (
+      {cat !== "blood" && missing.length > 0 && keys.length > 0 && (
         <p className="muted small" style={{ marginTop: "1.5rem" }}>
           Ohne Daten: {missing.map((m, i) => <span key={m.key}>{i ? ", " : ""}<Link className="link quiet" to={`/metric/${m.key}`}>{m.label}</Link></span>)}
         </p>

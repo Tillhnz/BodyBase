@@ -1445,3 +1445,92 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px color-mix(in s
 .tonight { background: linear-gradient(140deg, color-mix(in srgb, var(--c-sleep) 14%, var(--panel)), var(--panel)); }
 .hy-edit { padding: 0.7rem; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line-2); }
 .update-toast { background: var(--glass-strong); border-color: var(--line-2); box-shadow: inset 0 1px 0 var(--glass-hi), var(--glass-shadow); }
+
+/* ===================== Handy: schwebende Menüleiste und weniger Gedränge ===================== */
+@media (max-width: 800px) {
+  .sidebar nav {
+    left: 0.75rem; right: 0.75rem; bottom: calc(0.6rem + env(safe-area-inset-bottom));
+    padding: 0.3rem; border-radius: 24px; border: 1px solid var(--line-2);
+    box-shadow: inset 0 1px 0 var(--glass-hi), 0 18px 40px -16px rgba(0, 0, 0, 0.55), 0 4px 14px -8px rgba(0, 0, 0, 0.35);
+  }
+  .sidebar nav a { min-height: 48px; border-radius: 18px; padding: 0.3rem 0.1rem; }
+  .sidebar nav a.active { background: color-mix(in srgb, var(--iris) 16%, transparent); box-shadow: inset 0 1px 0 var(--glass-hi); }
+  .main { padding: 0.85rem 0.85rem calc(6.4rem + env(safe-area-inset-bottom)); }
+  .toasts { bottom: calc(5.9rem + env(safe-area-inset-bottom)); }
+  .update-toast { bottom: calc(5.9rem + env(safe-area-inset-bottom)) !important; }
+
+  /* Dichte */
+  h1 { font-size: 1.6rem; }
+  h2 { font-size: 1.12rem; }
+  .page-head { margin-bottom: 0.9rem; gap: 0.6rem; }
+  .page-head p { font-size: 0.88rem; margin-top: 0.15rem; }
+  .panel { padding: 0.9rem; margin-bottom: 0.85rem; border-radius: 18px; }
+  .panel-head { margin-bottom: 0.6rem; gap: 0.4rem; flex-wrap: wrap; }
+  .panel-head .tiny { width: 100%; }
+  .kpis { gap: 0.55rem; margin-bottom: 0.85rem; }
+  .kpi { padding: 0.7rem 0.8rem; }
+  .kpi-value { font-size: 1.45rem; }
+  .grid-2, .grid-3 { gap: 0.85rem; }
+  .bio, .labs { gap: 0.85rem; }
+
+  /* Coach: kompakter, Erklärtext kürzer */
+  .coach-list { gap: 0.5rem; }
+  .coach-item { padding: 0.6rem 0.65rem; gap: 0.6rem; }
+  .coach-item p { font-size: 0.84rem; }
+  .coach-item > div > p:not(.coach-advice) { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .coach-advice { font-size: 0.8rem; padding: 0.4rem 0.55rem; }
+  .coach-icon { width: 24px; height: 24px; font-size: 0.8rem; flex: none; }
+
+  /* Schlafbedarf: Bestandteile nebeneinander */
+  .tonight { gap: 0.6rem; }
+  .tonight-num { font-size: 2.1rem; }
+  .tonight-parts { min-width: 0; max-width: none; font-size: 0.82rem; gap: 0.3rem; }
+  .tonight-parts li { padding: 0.3rem 0.5rem; }
+  .tonight > p.tiny { display: none; }
+
+  /* Bio-Alter */
+  .bio-num { font-size: 3rem; }
+  .bio-factor { padding: 0.6rem 0.7rem; }
+  .bio-factor p.small { font-size: 0.82rem; }
+  .bio-factors { gap: 0.55rem; }
+
+  /* Tabs horizontal scrollbar statt umbrechen */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: none; }
+  .page-head .actions { gap: 0.4rem; }
+  .segmented { max-width: 100%; overflow-x: auto; }
+}
+
+/* ===================== Blutwerte ===================== */
+.labs { display: flex; flex-direction: column; gap: 1.1rem; }
+.labs .grid-2 { margin: 0; }
+.lab-summary { display: flex; flex-direction: column; gap: 0.2rem; }
+.lab-big { font-family: var(--font-display); font-size: 2.2rem; line-height: 1.1; }
+.bad-text { color: var(--signal); }
+.lab-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.lab-row { padding: 0.55rem 0.75rem 0.7rem; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); box-shadow: inset 0 1px 0 var(--glass-hi); }
+.lab-row.low, .lab-row.high { border-color: color-mix(in srgb, var(--signal) 35%, var(--line)); }
+.lab-head { all: unset; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "n v" "s s"; gap: 0.1rem 0.6rem; width: 100%; }
+@media (min-width: 640px) { .lab-head { grid-template-columns: minmax(0, 1fr) auto 9rem; grid-template-areas: "n v s"; align-items: baseline; } }
+.lab-name { grid-area: n; font-weight: 600; }
+.lab-val { grid-area: v; text-align: right; font-variant-numeric: tabular-nums; }
+.lab-st { grid-area: s; font-size: 0.78rem; color: var(--mute); }
+@media (min-width: 640px) { .lab-st { text-align: right; } }
+.lab-st.low, .lab-st.high { color: var(--signal); font-weight: 600; }
+.lab-st.optimal { color: var(--good); }
+.lab-st.ok { color: var(--warn); }
+.lab-range { position: relative; height: 6px; margin-top: 0.45rem; border-radius: 99px; background: color-mix(in srgb, var(--signal) 22%, transparent); }
+.lab-range .ref { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: color-mix(in srgb, var(--warn) 45%, transparent); }
+.lab-range .opt { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: color-mix(in srgb, var(--good) 70%, transparent); }
+.lab-range .dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--chalk); border: 2px solid var(--panel); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); }
+.lab-more { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.55rem; }
+.lab-note { margin: 0; padding: 0.4rem 0.55rem; border-radius: 10px; background: var(--ink-2); border: 1px solid var(--line); }
+.lab-review { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; max-height: 50vh; overflow: auto; }
+.lab-review li { display: grid; grid-template-columns: minmax(0, 1fr) 6.5rem; gap: 0.1rem 0.5rem; align-items: center; padding: 0.35rem 0.5rem; border-radius: 10px; background: var(--panel-2); }
+.lab-review li .tiny { grid-column: 1 / -1; }
+.lab-upload label:not(.check) { display: flex; flex-direction: column; gap: 0.25rem; max-width: 260px; }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.4rem 0; }
+.coach-area.area-Bildschirm { color: var(--c-heart); background: color-mix(in srgb, var(--c-heart) 15%, transparent); }
+.coach-area.area-Blutwerte { color: var(--c-heart); background: color-mix(in srgb, var(--c-heart) 15%, transparent); }
+.coach-more { margin-top: 0.6rem; width: 100%; }

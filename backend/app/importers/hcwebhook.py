@@ -35,6 +35,7 @@ INTERVAL = {
     "active_calories": ("active_energy", "calories", 1),
     "total_calories": ("total_energy", "calories", 1),
     "hydration": ("water", "liters", 1000),
+    "screen_time": ("screen_time", "minutes", 1),  # Bildschirmzeit aus der Sync-App (Android-Nutzungsstatistik)
 }
 NUTRITION = {"calories": ("calories_in", 1), "protein_grams": ("protein", 1), "carbs_grams": ("carbs", 1),
              "fat_grams": ("fat", 1), "caffeine_grams": ("caffeine", 1000)}
