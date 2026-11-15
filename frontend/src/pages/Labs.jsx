@@ -59,18 +59,45 @@ function Upload({ catalog, onSaved }) {
   const [rows, setRows] = useState([]);
   const [day, setDay] = useState("");
   const [add, setAdd] = useState("");
+  const [paste, setPaste] = useState("");
+  const [showPaste, setShowPaste] = useState(false);
+  function apply(r) {
+    setRes(r);
+    setDay(r.day);
+    setRows(r.markers.map((m) => ({ ...m, on: true, input: String(m.value).replace(".", ",") })));
+    if (r.hint) toast(r.hint, "info");
+  }
   async function pick(f) {
     if (!f) return;
     setBusy(true);
     try {
+      // Datei erst vollständig einlesen: Dateien aus Cloud-Ordnern (Drive, OneDrive) liefert Android sonst manchmal nicht aus
+      let buf;
+      try {
+        buf = await f.arrayBuffer();
+      } catch {
+        throw new Error("Die Datei ließ sich auf dem Gerät nicht lesen. Liegt sie in Google Drive oder OneDrive? Dann bitte erst herunterladen und die heruntergeladene Datei wählen.");
+      }
       const fd = new FormData();
-      fd.append("file", f);
-      const r = await api.upload("/labs/parse", fd);
-      setRes(r);
-      setDay(r.day);
-      setRows(r.markers.map((m) => ({ ...m, on: true, input: String(m.value).replace(".", ",") })));
-      if (r.hint) toast(r.hint, "info");
+      fd.append("file", new Blob([buf], { type: "application/pdf" }), (f.name || "befund.pdf").replace(/[^\w.-]+/g, "_"));
+      let r;
+      try {
+        r = await api.upload("/labs/parse", fd);
+      } catch (e) {
+        if (e instanceof TypeError) throw new Error("Die Verbindung zum Server ist beim Hochladen abgebrochen. Ist BodyBase auf dem neuesten Stand (bodybase update)? Alternativ den Text des Befunds kopieren und unten einfügen.");
+        throw e;
+      }
+      apply(r);
     } catch (e) { toast(e.message, "error"); } finally { setBusy(false); if (file.current) file.current.value = ""; }
+  }
+  async function parseText() {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("text", paste);
+      apply(await api.upload("/labs/parse", fd));
+      setPaste("");
+    } catch (e) { toast(e.message, "error"); } finally { setBusy(false); }
   }
   async function save() {
     const values = Object.fromEntries(rows.filter((r) => r.on && r.input !== "").map((r) => [r.key, Number(String(r.input).replace(",", "."))]).filter(([, v]) => !Number.isNaN(v)));
@@ -93,8 +120,15 @@ function Upload({ catalog, onSaved }) {
           <div className="actions">
             <input ref={file} type="file" accept="application/pdf,.pdf,.txt" hidden onChange={(e) => pick(e.target.files[0])} />
             <button className="btn primary" disabled={busy} onClick={() => file.current?.click()}>{busy ? "Lese …" : "PDF hochladen"}</button>
+            <button className="btn" onClick={() => setShowPaste(!showPaste)}>Text einfügen</button>
             <button className="btn" onClick={startManual}>Von Hand eintragen</button>
           </div>
+          {showPaste && (
+            <div className="lab-paste">
+              <textarea rows={6} value={paste} placeholder="Befund in der PDF markieren, kopieren und hier einfügen …" onChange={(e) => setPaste(e.target.value)} />
+              <button className="btn primary small" disabled={busy || paste.trim().length < 10} onClick={parseText}>Werte erkennen</button>
+            </div>
+          )}
         </>
       ) : (
         <>

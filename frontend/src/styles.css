@@ -1534,3 +1534,4 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px color-mix(in s
 .coach-area.area-Bildschirm { color: var(--c-heart); background: color-mix(in srgb, var(--c-heart) 15%, transparent); }
 .coach-area.area-Blutwerte { color: var(--c-heart); background: color-mix(in srgb, var(--c-heart) 15%, transparent); }
 .coach-more { margin-top: 0.6rem; width: 100%; }
+.lab-paste { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.7rem; } .lab-paste textarea { width: 100%; font: inherit; padding: 0.6rem; }
