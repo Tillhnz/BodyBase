@@ -68,3 +68,38 @@ def test_parse_rejects_empty(client):
     headers, _ = register(client)
     r = client.post("/api/labs/parse", headers=headers, data={"text": "nichts hier"}).json()
     assert r["markers"] == [] and r["hint"]
+
+
+def _scan(tmp_path):
+    """Ein „eingescannter“ Befund: Text als Bild gezeichnet und als reine Bild-PDF gespeichert."""
+    from PIL import Image, ImageDraw, ImageFont
+    lines = ["Entnahme: 03.11.2026", "Hämoglobin      15,1   g/dl    13,5 - 17,5", "Ferritin        28     ng/ml   30 - 400",
+             "HbA1c           5,6    %       < 5,7", "LDL-Cholesterin 131    mg/dl   < 116", "CRP             0,6    mg/l    < 5,0"]
+    img = Image.new("L", (1700, 700), 255)
+    d = ImageDraw.Draw(img)
+    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 36)
+    for i, line in enumerate(lines):
+        d.text((60, 60 + i * 90), line, fill=0, font=font)
+    pdf = tmp_path / "scan.pdf"
+    img.save(pdf, "PDF", resolution=200)
+    png = tmp_path / "scan.png"
+    img.save(png)
+    return pdf.read_bytes(), png.read_bytes()
+
+
+def test_ocr_scanned_pdf_and_photo(client, tmp_path):
+    import shutil
+
+    import pytest
+    if not (shutil.which("tesseract") and shutil.which("pdftoppm")):
+        pytest.skip("Tesseract nicht installiert")
+    headers, _ = register(client)
+    pdf, png = _scan(tmp_path)
+    for name, data, mime in (("scan.pdf", pdf, "application/pdf"), ("foto.png", png, "image/png")):
+        r = client.post("/api/labs/parse", headers=headers, files={"file": (name, data, mime)})
+        assert r.status_code == 200, r.text
+        res = r.json()
+        got = {m["key"]: m["value"] for m in res["markers"]}
+        assert res["ocr"] is True
+        assert got.get("hemoglobin") == 15.1 and got.get("ferritin") == 28 and got.get("crp") == 0.6, got
+        assert res["day"] == "2026-11-03"

@@ -4,6 +4,11 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     DATA_DIR=/data
 
+# Texterkennung für eingescannte Laborbefunde (Tesseract mit Deutsch, Poppler zum Umwandeln der PDF-Seiten in Bilder)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-deu poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

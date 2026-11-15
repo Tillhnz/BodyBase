@@ -79,7 +79,7 @@ function Upload({ catalog, onSaved }) {
         throw new Error("Die Datei ließ sich auf dem Gerät nicht lesen. Liegt sie in Google Drive oder OneDrive? Dann bitte erst herunterladen und die heruntergeladene Datei wählen.");
       }
       const fd = new FormData();
-      fd.append("file", new Blob([buf], { type: "application/pdf" }), (f.name || "befund.pdf").replace(/[^\w.-]+/g, "_"));
+      fd.append("file", new Blob([buf], { type: f.type || "application/pdf" }), (f.name || "befund.pdf").replace(/[^\w.-]+/g, "_"));
       let r;
       try {
         r = await api.upload("/labs/parse", fd);
@@ -88,6 +88,7 @@ function Upload({ catalog, onSaved }) {
         throw e;
       }
       apply(r);
+      if (r.ocr && r.markers.length) toast("Per Texterkennung gelesen – bitte die Werte besonders genau mit dem Befund vergleichen.", "info");
     } catch (e) { toast(e.message, "error"); } finally { setBusy(false); if (file.current) file.current.value = ""; }
   }
   async function parseText() {
@@ -116,10 +117,10 @@ function Upload({ catalog, onSaved }) {
       <div className="panel-head"><h2>Befund hinzufügen</h2></div>
       {!res ? (
         <>
-          <p className="small muted" style={{ marginTop: 0 }}>Lade den Laborbefund als PDF hoch. Die Werte werden ausgelesen, du prüfst sie und speicherst. Die Datei selbst wird nicht aufbewahrt.</p>
+          <p className="small muted" style={{ marginTop: 0 }}>Lade den Laborbefund als PDF hoch – auch eingescannt – oder fotografiere ihn. Die Werte werden auf deinem Server ausgelesen, du prüfst sie und speicherst. Die Datei selbst wird nicht aufbewahrt.</p>
           <div className="actions">
-            <input ref={file} type="file" accept="application/pdf,.pdf,.txt" hidden onChange={(e) => pick(e.target.files[0])} />
-            <button className="btn primary" disabled={busy} onClick={() => file.current?.click()}>{busy ? "Lese …" : "PDF hochladen"}</button>
+            <input ref={file} type="file" accept="application/pdf,.pdf,image/*,.txt" hidden onChange={(e) => pick(e.target.files[0])} />
+            <button className="btn primary" disabled={busy} onClick={() => file.current?.click()}>{busy ? "Lese … (Scans brauchen etwas länger)" : "PDF oder Foto hochladen"}</button>
             <button className="btn" onClick={() => setShowPaste(!showPaste)}>Text einfügen</button>
             <button className="btn" onClick={startManual}>Von Hand eintragen</button>
           </div>

@@ -191,6 +191,41 @@ def pdf_text(data: bytes) -> str:
     return "\n".join((p.extract_text() or "") for p in r.pages)
 
 
+OCR_MAX_PAGES = 8
+
+
+def ocr_available() -> bool:
+    import shutil
+    return bool(shutil.which("tesseract"))
+
+
+def _tesseract(png: bytes) -> str:
+    import subprocess
+    # psm 6: ein Textblock – hält Tabellenzeilen (Name, Wert, Einheit, Bereich) zusammen
+    r = subprocess.run(["tesseract", "stdin", "stdout", "-l", "deu+eng", "--psm", "6", "-c", "preserve_interword_spaces=1"],
+                       input=png, capture_output=True, timeout=120, check=False)
+    return r.stdout.decode("utf-8", "ignore")
+
+
+def ocr_pdf(data: bytes) -> str:
+    """Eingescannte PDF: Seiten mit 300 dpi in Bilder umwandeln (pdftoppm) und Text erkennen (Tesseract)."""
+    import subprocess
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "in.pdf"
+        src.write_bytes(data)
+        subprocess.run(["pdftoppm", "-r", "300", "-gray", "-png", "-l", str(OCR_MAX_PAGES), str(src), str(Path(tmp) / "p")],
+                       capture_output=True, timeout=180, check=True)
+        pages = sorted(Path(tmp).glob("p*.png"))
+        return "\n".join(_tesseract(p.read_bytes()) for p in pages)
+
+
+def ocr_image(data: bytes) -> str:
+    """Foto oder Scan als Bild (JPG/PNG): direkt an Tesseract."""
+    return _tesseract(data)
+
+
 def parse(text: str) -> dict:
     """Findet Marker in einem Laborbefund. Gibt Werte (schon umgerechnet), das Datum und nicht erkannte Zeilen zurück."""
     found: dict[str, dict] = {}
