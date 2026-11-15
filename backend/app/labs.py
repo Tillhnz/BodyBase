@@ -358,7 +358,7 @@ def links(latest: dict, sex: str, body: dict, age: float | None, lab_day: date |
             "Keine intensiven Einheiten, bis der Wert normal ist; bei Fieber oder anhaltend erhöhtem Wert ärztlich abklären.", ["crp"])
     elif crp is not None and crp < 1:
         add("good", "Kaum Entzündung", "CRP unter 1 mg/l – günstig für Herz und Gefäße.", None, ["crp"])
-    a1c, glu, trig = v.get("hba1c"), v.get("lab_glucose"), v.get("trig")
+    glu = v.get("lab_glucose")
     meta_bad = [k for k, lim in (("hba1c", 5.6), ("lab_glucose", 99), ("trig", 150), ("insulin", 15)) if v.get(k) is not None and v[k] > lim]
     if meta_bad:
         bits = []
