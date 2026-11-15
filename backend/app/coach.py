@@ -59,10 +59,8 @@ def insights(db: Session, user_id: int, today: date) -> list[dict]:
 
     last = db.scalar(select(func.max(Activity.start)).where(Activity.user_id == user_id, Activity.duplicate_of.is_(None)))
     if total < 6:
-        if last is None:
-            return [{"type": "tip", "title": "Los geht's", "text": "Sobald Trainings, Aktivitäten oder Gewohnheiten da sind, bekommst du hier Hinweise, welche Muskeln zu kurz kommen und was gut läuft."}]
-        days_ago = (today - last.date()).days
-        if days_ago >= 7:
+        days_ago = (today - last.date()).days if last else None
+        if days_ago is not None and days_ago >= 7:
             out.append({"type": "tip", "title": f"Seit {days_ago} Tagen kein Training",
                         "text": "Schon 20 Minuten mit ein paar Grundübungen bringen dich zurück in den Rhythmus. Fang leicht an."})
     else:
@@ -152,6 +150,8 @@ def insights(db: Session, user_id: int, today: date) -> list[dict]:
     for x in out:
         x.setdefault("area", "Kraft" if x.get("exercises") or x.get("group") else "Gewohnheiten" if x.get("habit_id") else "Training")
     allx = recent[:1] + sorted(recent[1:] + out, key=lambda x: order[x["type"]]) if recent and recent[0].get("area") == "Gesamtbild" else sorted(recent + out, key=lambda x: order[x["type"]])
+    if not allx:
+        allx = [{"type": "tip", "area": "Start", "title": "Los geht's", "text": "Sobald Trainings, Schlaf, Aktivitäten oder Gewohnheiten da sind, bekommst du hier Hinweise, was sich verändert hat und was du daraus machen kannst."}]
     return allx[:12]
 
 
