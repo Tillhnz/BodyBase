@@ -79,3 +79,19 @@ def test_widget_endpoint_with_ingest_key(client):
     d = r.json()
     assert d["habits_open_count"] == 1 and d["steps_goal"] == 8000 and len(d["history"]) == 7
     assert client.get("/api/ingest/health-connect/widget", headers={"X-API-Key": "falsch"}).status_code in (401, 403)
+
+
+def test_health_connect_route_and_skin_temp(client):
+    headers, _ = register(client)
+    k = client.get("/api/me/ingest", headers=headers).json()["token"]
+    payload = {"exercise": [{"start_time": "2026-11-10T07:00:00Z", "end_time": "2026-11-10T07:40:00Z", "type": "running",
+                             "duration_seconds": 2400, "route": [[50.11, 8.68], [50.12, 8.69], [50.13, 8.70]]}],
+               "skin_temperature": [{"time": "2026-11-10T02:00:00Z", "avg_delta_celsius": 0.42}]}
+    r = client.post("/api/ingest/health-connect", headers={"X-API-Key": k}, json=payload)
+    assert r.status_code == 200, r.text
+    acts = client.get("/api/activities?days=30", headers=headers).json()
+    items = acts["items"] if isinstance(acts, dict) else acts
+    a = next(x for x in items if x["start"].startswith("2026-11-10T07"))
+    assert a["has_map"]
+    m = client.get("/api/metrics/skin_temp_dev?days=30", headers=headers).json()
+    assert any(abs(p["value"] - 0.42) < 0.01 for p in m.get("series", m.get("points", [])))

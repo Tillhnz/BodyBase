@@ -79,6 +79,22 @@ def looks_like(payload: dict) -> bool:
     return isinstance(payload, dict) and "app_version" in payload and "timestamp" in payload and "metrics" not in payload
 
 
+def _route(points) -> str | None:
+    """GPS-Strecke aus der Sync-App ([[lat, lon], …], schon ausgedünnt) als Polyline für die Karte."""
+    if not isinstance(points, list) or len(points) < 2:
+        return None
+    from .polyline import encode
+    pts = []
+    for p in points:
+        try:
+            lat, lon = float(p[0]), float(p[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if -90 <= lat <= 90 and -180 <= lon <= 180:
+            pts.append((lat, lon))
+    return encode(pts) if len(pts) >= 2 else None
+
+
 def ingest(w: Writer, payload: dict) -> dict:
     counts = {"records": 0}
 
@@ -163,6 +179,7 @@ def ingest(w: Writer, payload: dict) -> dict:
             duration_s=_num(item.get("duration_seconds")) or ((end - start).total_seconds() if end else None),
             distance_m=_num(item.get("distance_meters")), calories=_num(item.get("calories")),
             avg_hr=_num(item.get("avg_heart_rate")), max_hr=_num(item.get("max_heart_rate")),
+            polyline=_route(item.get("route")),
         ))
         rec()
     return counts

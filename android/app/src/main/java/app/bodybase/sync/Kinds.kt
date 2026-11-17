@@ -21,6 +21,8 @@ import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RespiratoryRateRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
+import androidx.health.connect.client.records.ExerciseRouteResult
+import androidx.health.connect.client.records.SkinTemperatureRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
@@ -188,6 +190,22 @@ suspend inline fun <reified T : Record> HealthConnectClient.hourlyMax(
     return best.map { (h, v) -> h to v }
 }
 
+private fun round2(v: Double) = Math.round(v * 100.0) / 100.0
+
+/** GPS-Strecke eines Trainings (eigene Freigabe „Trainingsrouten“), auf höchstens 800 Punkte ausgedünnt. */
+suspend fun route(c: HealthConnectClient, r: ExerciseSessionRecord): JSONArray? = runCatching {
+    val full = c.readRecord(ExerciseSessionRecord::class, r.metadata.id).record
+    val res = full.exerciseRouteResult as? ExerciseRouteResult.Data ?: return null
+    val pts = res.exerciseRoute.route
+    if (pts.size < 2) return null
+    val step = maxOf(1, pts.size / 800)
+    val out = JSONArray()
+    pts.forEachIndexed { i, p ->
+        if (i % step == 0 || i == pts.lastIndex) out.put(JSONArray().put(p.latitude).put(p.longitude))
+    }
+    out
+}.getOrNull()
+
 object Kinds {
     private val H6: Duration = Duration.ofHours(6)
     private val D2: Duration = Duration.ofDays(2)
@@ -216,6 +234,7 @@ object Kinds {
                     ?: c.agg(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL, r.startTime, r.endTime))?.inKilocalories?.takeIf { it > 0 })
                 j.maybe("avg_heart_rate", c.agg(HeartRateRecord.BPM_AVG, r.startTime, r.endTime)?.toDouble())
                 j.maybe("max_heart_rate", c.agg(HeartRateRecord.BPM_MAX, r.startTime, r.endTime)?.toDouble())
+                route(c, r)?.let { j.put("route", it) }
                 j
             }
         },
@@ -271,6 +290,15 @@ object Kinds {
         },
         Kind("respiratory_rate", "Atemfrequenz", Group.VITALS, RespiratoryRateRecord::class, D2) { c, a, b ->
             c.all<RespiratoryRateRecord>(a, b).map { at(it.time).put("rate", it.rate) }
+        },
+        // Hauttemperatur in der Nacht (Fitbit, Pixel Watch, Oura …): Abweichung vom eigenen Ausgangswert
+        Kind("skin_temperature", "Hauttemperatur", Group.VITALS, SkinTemperatureRecord::class, D2) { c, a, b ->
+            c.all<SkinTemperatureRecord>(a, b).mapNotNull { r ->
+                val d = r.deltas.map { it.delta.inCelsius }
+                if (d.isEmpty()) return@mapNotNull null
+                at(r.startTime).put("avg_delta_celsius", round2(d.average()))
+                    .also { j -> r.baseline?.let { j.put("baseline_celsius", round2(it.inCelsius)) } }
+            }
         },
         Kind("body_temperature", "Körpertemperatur", Group.VITALS, BodyTemperatureRecord::class, D2) { c, a, b ->
             c.all<BodyTemperatureRecord>(a, b).map { at(it.time).put("celsius", it.temperature.inCelsius) }
