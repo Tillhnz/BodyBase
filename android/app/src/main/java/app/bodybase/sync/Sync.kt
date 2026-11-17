@@ -47,10 +47,10 @@ class Api(base: String, private val key: String) {
 
     private class Res(val code: Int, val body: String)
 
-    private fun call(method: String, json: String?): Res {
+    private fun call(method: String, json: String?, path: String = ""): Res {
         if (endpoint.isEmpty()) throw SyncError("Bitte die Adresse deines BodyBase eintragen.", retry = false)
         val conn = try {
-            URL(endpoint).openConnection() as HttpURLConnection
+            URL(endpoint + path).openConnection() as HttpURLConnection
         } catch (e: Exception) {
             throw SyncError("Ungültige Adresse: $endpoint", retry = false)
         }
@@ -98,6 +98,13 @@ class Api(base: String, private val key: String) {
         if (r.code !in 200..299) throw problem(r)
         val account = runCatching { JSONObject(r.body).optString("account") }.getOrNull()
         return if (!account.isNullOrBlank()) "Verbunden mit dem Konto $account" else "Verbindung steht"
+    }
+
+    /** Tagesstand für die Widgets. */
+    fun widget(): JSONObject {
+        val r = call("GET", null, "/widget")
+        if (r.code !in 200..299) throw problem(r)
+        return JSONObject(r.body)
     }
 
     fun send(kind: String, items: List<JSONObject>, aggregated: Boolean = false) {
@@ -207,6 +214,7 @@ object Sync {
                 }
             }
             prefs.lastRun = System.currentTimeMillis()
+            Widgets.requestUpdate(ctx)
             prefs.lastCounts = counts
             prefs.total = prefs.total + counts.values.sum()
             prefs.lastError = problems.joinToString("\n").ifBlank { null }

@@ -316,6 +316,40 @@ async def ingest_hae(request: Request, db: Session = Depends(get_db)):
     return {"ok": True, "counts": counts}
 
 
+@router.get("/ingest/health-connect/widget")
+def ingest_widget(request: Request, db: Session = Depends(get_db)):
+    """Kompakter Tagesstand für die Startbildschirm-Widgets der Sync-App (Schlüssel wie beim Senden)."""
+    from datetime import timedelta as _td
+
+    from .. import reminders, scores
+    from ..scores import Context
+    from ..store import daily_series
+    from ..timeutil import today as _today
+    user = _ingest_user(request, db)
+    t = _today()
+    sc = scores.today_scores(db, user, 7)
+
+    def pick(x, *keys):
+        return {k: x.get(k) for k in keys} if x else None
+
+    steps = daily_series(db, user, "steps", t, t)
+    goal = int(((user.prefs or {}).get("goals") or {}).get("steps") or 8000)
+    try:
+        need = Context(db, user, t - _td(days=35), t + _td(days=1)).need(t + _td(days=1))["need"]
+    except Exception:  # noqa: BLE001
+        need = None
+    habits = reminders.open_habits(db, user, t)
+    return {
+        "day": t.isoformat(), "computed_at": sc["computed_at"],
+        "readiness": pick(sc["readiness"], "value", "label", "day"),
+        "sleep": pick(sc["sleep"], "value", "label", "day"),
+        "load": {"value": sc["load"].get("value"), "target": sc["load"].get("target"), "label": sc["load"].get("label")},
+        "steps": round(steps[-1]["value"]) if steps else 0, "steps_goal": goal,
+        "sleep_need": need, "habits_open": [h["name"] for h in habits][:4], "habits_open_count": len(habits),
+        "history": [{"day": h["day"], "readiness": h["readiness"], "sleep": h["sleep"], "load": h["load"]} for h in sc["history"]],
+    }
+
+
 @router.api_route("/ingest/{kind}", methods=["GET", "HEAD"])
 def ingest_check(kind: str, request: Request, db: Session = Depends(get_db)):
     """Verbindungstest für Apps (GET/HEAD auf eine Empfangsadresse): prüft nur den Schlüssel, speichert nichts."""

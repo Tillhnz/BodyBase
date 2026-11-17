@@ -67,3 +67,15 @@ def test_coach_recent_changes_sleep_debt(client):
     assert client.get("/api/sleep/need?days=30", headers=headers).json()["history"].__len__() == 30
     stats = client.get("/api/activities/stats?days=30", headers=headers).json()
     assert len(stats["load"]) == 30
+
+
+def test_widget_endpoint_with_ingest_key(client):
+    headers, _ = register(client)
+    key = client.get("/api/me/ingest", headers=headers).json()
+    k = key.get("key") or key.get("token") or key.get("api_key")
+    client.post("/api/habits", headers=headers, json={"name": "Dehnen", "kind": "check"})
+    r = client.get("/api/ingest/health-connect/widget", headers={"X-API-Key": k})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["habits_open_count"] == 1 and d["steps_goal"] == 8000 and len(d["history"]) == 7
+    assert client.get("/api/ingest/health-connect/widget", headers={"X-API-Key": "falsch"}).status_code in (401, 403)

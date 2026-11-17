@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/root"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:background="@drawable/widget_bg"
+    android:gravity="center" android:orientation="vertical" android:padding="10dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bereitschaft"
+        android:textColor="#B3FFFFFF" android:textSize="11sp" />
+    <TextView android:id="@+id/readiness_value" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="–"
+        android:textColor="#FFFFFFFF" android:textSize="40sp" android:fontFamily="sans-serif-medium" />
+    <TextView android:id="@+id/small_sub" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text=""
+        android:textColor="#B3FFFFFF" android:textSize="11sp" android:maxLines="2" android:gravity="center" />
+</LinearLayout>
