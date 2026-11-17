@@ -138,7 +138,7 @@ class Model(private val ctx: Context) {
 
     fun permissions(): Set<String> = buildSet {
         Kinds.ALL.forEach { add(it.permission) }
-        add(HealthPermission.PERMISSION_READ_EXERCISE_ROUTES) // GPS-Strecken der Trainings
+        add("android.permission.health.READ_EXERCISE_ROUTES") // GPS-Strecken der Trainings
         if (bgFeature) add(HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
         if (historyFeature) add(HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY)
     }
