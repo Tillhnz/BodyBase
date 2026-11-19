@@ -92,7 +92,35 @@ export default function StrengthLog() {
   const ids = useMemo(() => [...new Set((w?.exercises || []).map((b) => b.exercise_id))].sort().join(","), [w]);
   useEffect(() => {
     if (!ids) return;
-    api.post("/strength/previous", { ids: ids.split(",").map(Number), before: w?.start }).then(setPrevious).catch(() => {});
+    api.post("/strength/previous", { ids: ids.split(",").map(Number), before: w?.start }).then((prev) => {
+      setPrevious(prev);
+      // Werte vom letzten Mal in die noch offenen Sätze übernehmen (einmal je Übung, eigene Eingaben bleiben danach unberührt)
+      change((cur) => {
+        if (!cur?.exercises?.some((b) => !b.prefilled)) return cur;
+        const fetched = new Set(ids.split(","));
+        return {
+          ...cur,
+          exercises: cur.exercises.map((b) => {
+            if (b.prefilled || !fetched.has(String(b.exercise_id))) return b;
+            const p = prev[String(b.exercise_id)] || [];
+            return {
+              ...b, prefilled: true,
+              sets: b.sets.map((st, i) => {
+                const q = p[i];
+                if (st.done || !q) return st;
+                return {
+                  ...st,
+                  kg: q.kg != null ? String(q.kg).replace(".", ",") : st.kg,
+                  reps: q.reps != null ? String(q.reps) : st.reps,
+                  duration_s: q.duration_s != null ? q.duration_s : st.duration_s,
+                  distance_m: q.distance_m != null ? String(q.distance_m / 1000).replace(".", ",") : st.distance_m,
+                };
+              }),
+            };
+          }),
+        };
+      });
+    }).catch(() => {});
   }, [ids]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pausentimer
@@ -177,7 +205,7 @@ export default function StrengthLog() {
         </div>
       )}
 
-      {finishing && <FinishDialog w={w} stats={stats} elapsed={elapsed} onClose={() => setFinishing(false)}
+      {finishing && <FinishDialog w={w} stats={stats} elapsed={elapsed} byId={ex.byId} onClose={() => setFinishing(false)}
         onSaved={(saved) => {
           writeLocalActive(null);
           clearTimeout(saveTimer.current);
@@ -221,13 +249,48 @@ function HrBadge({ hr }) {
   );
 }
 
-function FinishDialog({ w, stats, elapsed, onClose, onSaved }) {
+function FinishDialog({ w, stats, elapsed, byId, onClose, onSaved }) {
   const [name, setName] = useState(w.name || "Training");
   const [notes, setNotes] = useState(w.notes || "");
   const [busy, setBusy] = useState(false);
   const undone = w.exercises.reduce((n, b) => n + b.sets.filter((s) => !s.done && (parseNum(s.kg) != null || parseNum(s.reps) != null || parseClock(s.duration_s))).length, 0);
   const [keepUndone, setKeepUndone] = useState(false);
   const [duration, setDuration] = useState(Math.round(elapsed / 60));
+  const [routine, setRoutine] = useState(null);
+  const [routineAction, setRoutineAction] = useState(w.routine_id ? "update" : "none");
+  const [routineName, setRoutineName] = useState(w.name || "Neue Routine");
+  useEffect(() => {
+    if (w.routine_id) api.get(`/strength/routines/${w.routine_id}`).then(setRoutine).catch(() => setRoutine(null));
+  }, [w.routine_id]);
+  const doneBlocks = w.exercises.filter((b) => b.sets.some((st) => st.done));
+  const inRoutine = new Set((routine?.exercises || []).map((e) => e.exercise_id));
+  const added = routine ? doneBlocks.filter((b) => !inRoutine.has(b.exercise_id)) : [];
+  const askRoutine = (w.routine_id && routine && added.length > 0) || (!w.routine_id && doneBlocks.length > 0);
+  const nameOf = (id) => byId?.get(id)?.name || "Übung";
+
+  async function applyRoutine() {
+    if (!askRoutine || routineAction === "none") return;
+    const block = (b) => {
+      const out = fromDraftBlock(b);
+      const done = out.sets.filter((st, i) => b.sets[i].done);
+      return { ...out, sets: done.length ? done : out.sets };
+    };
+    if (routineAction === "update" && routine) {
+      // bisherige Übungen der Routine behalten (mit ihren Sätzen), neue in der Reihenfolge des Trainings einfügen
+      const keep = new Map((routine.exercises || []).map((e) => [e.exercise_id, e]));
+      const order = [];
+      for (const b of w.exercises) {
+        if (keep.has(b.exercise_id)) { order.push(keep.get(b.exercise_id)); keep.delete(b.exercise_id); }
+        else if (b.sets.some((st) => st.done)) order.push(block(b));
+      }
+      order.push(...keep.values()); // im Training ausgelassene Übungen bleiben in der Routine
+      await api.put(`/strength/routines/${routine.id}`, { name: routine.name, folder: routine.folder || "", notes: routine.notes || "", exercises: order });
+      toast(`Routine „${routine.name}“ aktualisiert`);
+    } else if (routineAction === "new") {
+      await api.post("/strength/routines", { name: routineName.trim() || "Neue Routine", folder: routine?.folder || "", notes: "", exercises: doneBlocks.map(block) });
+      toast(`Neue Routine „${routineName.trim() || "Neue Routine"}“ gespeichert`);
+    }
+  }
 
   async function save() {
     setBusy(true);
@@ -249,6 +312,7 @@ function FinishDialog({ w, stats, elapsed, onClose, onSaved }) {
       }
       const saved = await api.post("/strength/workouts", body);
       toast("Training gespeichert");
+      try { await applyRoutine(); } catch (err) { toast(`Routine nicht gespeichert: ${err.message}`, "error"); }
       onSaved(saved);
     } catch (err) {
       toast(err.message, "error");
@@ -270,6 +334,20 @@ function FinishDialog({ w, stats, elapsed, onClose, onSaved }) {
         {undone > 0 && (
           <label className="check"><input type="checkbox" checked={keepUndone} onChange={(e) => setKeepUndone(e.target.checked)} />
             {undone} ausgefüllte, aber nicht abgehakte Sätze trotzdem speichern</label>
+        )}
+        {askRoutine && (
+          <fieldset className="routine-choice">
+            <legend>{routine ? `Neue Übungen: ${added.map((b) => nameOf(b.exercise_id)).join(", ")}` : "Als Routine merken?"}</legend>
+            {routine && (
+              <label className="check"><input type="radio" name="ra" checked={routineAction === "update"} onChange={() => setRoutineAction("update")} />
+                In „{routine.name}“ übernehmen</label>
+            )}
+            <label className="check"><input type="radio" name="ra" checked={routineAction === "new"} onChange={() => setRoutineAction("new")} />
+              Als neue Routine speichern</label>
+            {routineAction === "new" && <input value={routineName} onChange={(e) => setRoutineName(e.target.value)} maxLength={160} aria-label="Name der neuen Routine" />}
+            <label className="check"><input type="radio" name="ra" checked={routineAction === "none"} onChange={() => setRoutineAction("none")} />
+              {routine ? "Nur dieses Mal" : "Nein"}</label>
+          </fieldset>
         )}
         {w.rest ? <p className="hint">Laufende Pause ({fmtRest(w.rest.total)}) wird beendet.</p> : null}
         <div className="actions">
