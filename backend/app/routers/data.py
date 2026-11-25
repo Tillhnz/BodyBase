@@ -242,6 +242,15 @@ def sleep_need(days: int = Query(14, ge=7, le=365), user: User = Depends(current
     return out
 
 
+@router.get("/explorer")
+def explorer(sports: str = "", year_from: int | None = Query(None, alias="from", ge=1990, le=2100),
+             year_to: int | None = Query(None, alias="to", ge=1990, le=2100), highlight: int | None = Query(None, ge=1990, le=2100),
+             user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Heatmap aller Strecken und Explorer-Kacheln, gefiltert nach Sportarten und Jahren."""
+    from .. import explorer as E
+    return E.overview(db, user, [x for x in sports.split(",") if x] or None, year_from, year_to, highlight)
+
+
 @router.get("/bio-age")
 def bio_age(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Biologisches Alter aus allen Messwerten, mit Begründung je Messwert."""

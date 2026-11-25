@@ -5,6 +5,7 @@ import Shell from "./components/Shell.jsx";
 import { ErrorBoundary, FeedbackHost } from "./components/feedback.jsx";
 import { loadMeta, resetMeta } from "./meta.js";
 import Activities, { ActivityDetail } from "./pages/Activities.jsx";
+import Heatmap from "./pages/Heatmap.jsx";
 import Admin from "./pages/Admin.jsx";
 import Health from "./pages/Health.jsx";
 import Home from "./pages/Home.jsx";
@@ -76,6 +77,7 @@ export default function App() {
             <Route path="/" element={<Home user={user} />} />
             <Route path="/activities" element={<Activities />} />
             <Route path="/activities/:id" element={<ActivityDetail />} />
+            <Route path="/heatmap" element={<Heatmap />} />
             <Route path="/strength" element={<Strength />} />
             <Route path="/habits" element={<Habits />} />
             <Route path="/api-docs" element={<ApiDocs />} />

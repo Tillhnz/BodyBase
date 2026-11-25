@@ -96,7 +96,10 @@ export default function Activities() {
     <div className="cat-activity">
       <div className="page-head">
         <div><h1>Aktivitäten</h1><p>Alle Einheiten aus allen Quellen. Dieselbe Einheit aus mehreren Quellen erscheint nur einmal.</p></div>
-        <Segmented value={days} onChange={setDays} options={RANGES} label="Zeitraum" />
+        <div className="actions">
+          <Link className="btn" to="/heatmap">🗺 Heatmap & Entdecken</Link>
+          <Segmented value={days} onChange={setDays} options={RANGES} label="Zeitraum" />
+        </div>
       </div>
       {totals && (
         <div className="kpis">

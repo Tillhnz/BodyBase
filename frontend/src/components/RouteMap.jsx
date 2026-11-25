@@ -5,7 +5,7 @@ import { api } from "../api.js";
 import { decodePolyline, Route } from "./charts.jsx";
 
 let configPromise = null;
-function loadMapConfig() {
+export function loadMapConfig() {
   if (!configPromise) configPromise = api.get("/map-config").catch((e) => { configPromise = null; throw e; });
   return configPromise;
 }
