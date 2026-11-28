@@ -12,7 +12,11 @@ def _fake_weather(uv, sun):
 def test_supplement_tracker_and_vitd_advice(client, monkeypatch):
     from app import supplements as SP
     headers, _ = register(client)
-    cat = client.get("/api/supplements/today", headers=headers).json()["catalog"]
+    monkeypatch.setattr(SP, "weather", _fake_weather(2, 1))
+    client.put("/api/supplements/location", headers=headers, json={"lat": 53.5, "lon": 10.0, "name": "Hamburg"})
+    first = client.get("/api/supplements/today", headers=headers).json()
+    assert first["weather"]["uv_max"] == 2  # Wetter auch ohne angelegte Supplements
+    cat = first["catalog"]
     assert any(c["key"] == "vitd" for c in cat)
     h = client.post("/api/habits", headers=headers, json={"name": "Vitamin D3", "supplement": {"key": "vitd", "dose": 2000, "unit": "IE"}}).json()
     assert h["kind"] == "check" and h["supplement"]["dose"] == 2000

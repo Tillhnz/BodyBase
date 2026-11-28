@@ -94,7 +94,7 @@ class LocationIn(BaseModel):
 def supplements_today(lat: float | None = None, lon: float | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Eigene Supplements mit Empfehlung für heute (Vitamin D nach UV-Index am Ort) und der Katalog."""
     from .. import supplements as SP
-    return SP.today_advice(db, user, lat, lon)
+    return SP.today_advice(db, user, lat, lon, want_weather=True)
 
 
 @router.put("/supplements/location")

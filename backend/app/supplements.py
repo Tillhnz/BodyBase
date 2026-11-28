@@ -202,7 +202,7 @@ def _vitd(db: Session, user: User, loc: dict | None, w: dict | None) -> dict:
             + (f" Dein letzter Wert: {round(lab[0])} ng/ml." if lab else "")}
 
 
-def today_advice(db: Session, user: User, lat: float | None = None, lon: float | None = None, name: str | None = None) -> dict:
+def today_advice(db: Session, user: User, lat: float | None = None, lon: float | None = None, name: str | None = None, want_weather: bool = False) -> dict:
     """Empfehlung für jedes eigene Supplement für heute: nehmen / optional / besser nicht – mit Grund."""
     from . import habits as H
     from .scores import Context
@@ -210,7 +210,7 @@ def today_advice(db: Session, user: User, lat: float | None = None, lon: float |
     t = today()
     habits = db.scalars(select(Habit).where(Habit.user_id == user.id, Habit.archived.isnot(True))).all()
     mine = [h for h in habits if (h.supplement or {}).get("key") in BY_KEY]
-    need_weather = lat is not None or any(h.supplement["key"] in ("vitd", "electrolytes") for h in mine)
+    need_weather = want_weather or lat is not None or any(h.supplement["key"] in ("vitd", "electrolytes") for h in mine)
     w = weather(loc["lat"], loc["lon"]) if loc and need_weather else None
     try:
         ctx = Context(db, user, t - timedelta(days=3), t)
