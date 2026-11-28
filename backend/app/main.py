@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from . import __version__, audit, server_settings, sync
 from .config import settings
 from .database import Base, SessionLocal, engine, ensure_columns
+from . import supplements  # noqa: F401 - Messgrößen der Supplements anmelden
 from .routers import account, admin, apikeys, auth, connections, data, habits, imports, labs, mapconfig, segments, strength, version
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

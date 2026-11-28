@@ -465,6 +465,29 @@ def links(latest: dict, sex: str, body: dict, age: float | None, lab_day: date |
     return out
 
 
+def supplement_links(db: Session, user: User, latest: dict) -> list[dict]:
+    """Blutwerte und eingenommene Supplements zusammen betrachten."""
+    from . import supplements as SP
+    from .models import Habit
+    mine = {(h.supplement or {}).get("key"): h for h in db.scalars(select(Habit).where(Habit.user_id == user.id, Habit.archived.isnot(True))) if h.supplement}
+    out = []
+    pairs = [("vitd", "vitd", 30, 60), ("b12", "b12", 400, 900), ("iron", "ferritin", 50, 150), ("magnesium", "magnesium", 0.85, 1.05), ("folate", "folate", 4, 20)]
+    for sk, lk, lo, hi in pairs:
+        if lk not in latest:
+            continue
+        v = latest[lk]["value"]
+        name = SP.BY_KEY[sk].label
+        if sk in mine and v > hi:
+            out.append({"type": "tip", "title": f"{name}: Wert hoch trotz/wegen Einnahme", "text": f"Du nimmst {name} und der Wert liegt bei {v:g} – über dem Zielbereich.",
+                        "advice": "Dosis senken oder pausieren und in 2–3 Monaten neu messen.", "markers": [lk]})
+        elif sk in mine and v < lo:
+            out.append({"type": "tip", "title": f"{name}: trotz Einnahme niedrig", "text": f"Der Wert ({v:g}) ist noch unter dem Ziel – Dosis, Regelmäßigkeit oder Aufnahme prüfen ({SP.BY_KEY[sk].how})",
+                        "advice": "Regelmäßig abhaken hilft zu sehen, ob es an der Einnahme liegt.", "markers": [lk]})
+        elif sk in mine:
+            out.append({"type": "good", "title": f"{name} wirkt", "text": f"Mit Einnahme im Zielbereich ({v:g}).", "advice": None, "markers": [lk]})
+    return out
+
+
 def overview(db: Session, user: User) -> dict:
     sex = user.sex or "m"
     hist = history(db, user)
@@ -494,5 +517,9 @@ def overview(db: Session, user: User) -> dict:
         if p:
             pheno = {"value": round(p, 1), "age": round(age - (t - last_day).days / 365, 1), "day": last_day.isoformat()}
     missing_pheno = [BY_KEY[k].label for k in ["albumin", "creatinine", "lab_glucose", "crp", "lymph_pct", "mcv", "rdw", "alp", "wbc"] if k not in latest]
-    return {"markers": markers, "groups": GROUPS, "reports": days, "links": links(latest, sex, body, age, last_day), "phenoage": pheno,
+    try:
+        extra = supplement_links(db, user, latest)
+    except Exception:  # noqa: BLE001
+        extra = []
+    return {"markers": markers, "groups": GROUPS, "reports": days, "links": links(latest, sex, body, age, last_day) + extra, "phenoage": pheno,
             "phenoage_missing": missing_pheno, "catalog": [{"key": m.key, "label": m.label, "unit": m.unit, "group": m.group} for m in M]}

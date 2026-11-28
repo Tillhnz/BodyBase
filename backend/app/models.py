@@ -307,6 +307,7 @@ class Habit(Base):
     name: Mapped[str] = mapped_column(String(120))
     kind: Mapped[str] = mapped_column(String(20), default="count")  # count (Zahl erreichen) | check (erledigt ja/nein)
     exercise_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # zählt dann für die Körperkarte
+    supplement: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {"key", "dose", "unit", "time"} – Supplement statt Gewohnheit
     unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
     target: Mapped[float | None] = mapped_column(Float, nullable=True)  # Ziel in der Startwoche
     increment: Mapped[float | None] = mapped_column(Float, nullable=True)  # Erhöhung je Woche (Montag)

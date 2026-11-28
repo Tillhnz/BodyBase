@@ -1564,3 +1564,29 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px color-mix(in s
 .year-bars button.on span { background: #ffd166; }
 .year-bars small { font-size: 0.68rem; color: var(--mute); }
 @media (max-width: 800px) { .explorer-map { height: 60vh; } }
+
+/* Supplements */
+.supps { display: flex; flex-direction: column; gap: 0.9rem; }
+.supps .panel { margin: 0; }
+.supp-weather { display: flex; flex-wrap: wrap; gap: 0.8rem 1.4rem; align-items: center; justify-content: space-between;
+  background: linear-gradient(140deg, color-mix(in srgb, #ffd166 16%, var(--panel)), var(--panel)); }
+.supp-weather > div:first-child { display: flex; flex-direction: column; }
+.supp-wx { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.supp-wx span { display: flex; flex-direction: column; padding: 0.35rem 0.65rem; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); }
+.supp-wx small { font-size: 0.7rem; color: var(--mute); }
+.supp-head { display: flex; gap: 0.8rem; align-items: center; }
+.supp-name { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.supp-check { width: 44px; height: 44px; flex: none; border-radius: 14px; border: 2px solid var(--line-2); background: var(--panel-2);
+  color: transparent; font-size: 1.3rem; font-weight: 700; cursor: pointer; }
+.supp-check.on { background: var(--good); border-color: var(--good); color: #0d1119; }
+.supp-level { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.15rem 0.55rem; border-radius: 99px; }
+.supp-level.good { color: var(--good); background: color-mix(in srgb, var(--good) 15%, transparent); }
+.supp-level.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 15%, transparent); }
+.supp-level.mute { color: var(--mute); background: color-mix(in srgb, var(--mute) 15%, transparent); }
+.supp-card.taken .supp-level { color: var(--good); background: color-mix(in srgb, var(--good) 15%, transparent); }
+.supp-advice { margin-top: 0.6rem; padding: 0.5rem 0.7rem; border-radius: 12px; font-size: 0.88rem; background: var(--panel-2); border-left: 3px solid var(--line-2); }
+.supp-advice.good { border-left-color: var(--good); }
+.supp-advice.warn { border-left-color: var(--warn); }
+.supp-card.taken .supp-advice { opacity: 0.7; }
+.supp-more p { margin: 0.35rem 0 0; }
+.supp-eff + .supp-eff { margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--line); }

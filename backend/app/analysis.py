@@ -442,6 +442,12 @@ def comparisons(data: Data) -> list[dict]:
         comp("Achtsamkeit", "ab 10 Minuten", [d for d in days if mind.get(d, 0) >= 10], "keine",
              [d for d in days if d not in mind or mind[d] == 0], [("hrv", 1, "nächster Morgen"), ("bb_sleep", 1, "folgende Nacht"),
                                                                 ("stress", 0, "am selben Tag")])
+    try:  # Supplements als Einflussfaktor: Tage mit und ohne Einnahme
+        from . import supplements as SP
+        for args in SP.comparisons_for(data):
+            comp(*args, note="Vergleich nur ab der ersten Einnahme; Supplements wirken oft erst über Wochen – siehe auch Vorher/Nachher unter Supplements.")
+    except Exception:  # noqa: BLE001
+        pass
     out.sort(key=lambda c: -c["strongest"])
     return out
 

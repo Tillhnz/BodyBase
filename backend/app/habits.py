@@ -81,7 +81,7 @@ def habit_dict(db: Session, h: Habit, today: date, days: int = 28) -> dict:
         d += timedelta(days=1)
     return {
         "id": h.id, "name": h.name, "kind": h.kind, "exercise_id": h.exercise_id, "exercise": ex.name if ex else None,
-        "unit": h.unit, "target": h.target, "increment": h.increment, "max_target": h.max_target, "start": h.start.isoformat(),
+        "supplement": h.supplement, "unit": h.unit, "target": h.target, "increment": h.increment, "max_target": h.max_target, "start": h.start.isoformat(),
         "weekdays": h.weekdays or [], "color": h.color, "archived": bool(h.archived),
         "today": {"value": logs.get(today), "target": target_for(h, today), "due": due_on(h, today),
                   "done": is_done(h, today, logs.get(today))},
@@ -117,10 +117,25 @@ def clean(data: dict, db: Session, user_id: int) -> dict:
         start = date.fromisoformat(start) if start else None
     except ValueError:
         raise HabitError("Ungültiges Startdatum.")
+    supp = None
+    if data.get("supplement"):
+        from . import supplements as SP
+        sd = data["supplement"] if isinstance(data["supplement"], dict) else {}
+        cat = SP.BY_KEY.get(sd.get("key"))
+        if not cat:
+            raise HabitError("Unbekanntes Supplement.")
+        try:
+            dose = float(str(sd.get("dose") or cat.dose).replace(",", "."))
+        except ValueError:
+            raise HabitError("Bitte eine Zahl als Dosis eintragen.")
+        supp = {"key": cat.key, "dose": max(0.0, min(dose, 1e6)), "unit": (sd.get("unit") or cat.unit)[:12],
+                "time": sd.get("time") if sd.get("time") in SP.TIME_LABEL else cat.time}
+        kind = "check"
     target = num("target")
     if kind == "count" and not target:
         raise HabitError("Bitte ein Tagesziel eintragen (z. B. 20 Liegestütze).")
-    return {
+    extra = {"supplement": supp} if "supplement" in data else {}
+    return {**extra,
         "name": name, "kind": kind, "exercise_id": int(ex_id) if ex_id else None,
         "unit": (data.get("unit") or "").strip()[:20] or ("Wdh." if ex_id else None),
         "target": target, "increment": num("increment", -1000, 1000), "max_target": num("max_target"),
@@ -137,6 +152,9 @@ def log(db: Session, h: Habit, d: date, value: float | None = None, add: float |
         if row:
             db.delete(row)
         db.commit()
+        if h.supplement:
+            from . import supplements
+            supplements.sync_sample(db, h, d, None)
         return None
     value = min(value, 100000)
     if row is None:
@@ -145,6 +163,9 @@ def log(db: Session, h: Habit, d: date, value: float | None = None, add: float |
     else:
         row.value = value
     db.commit()
+    if h.supplement:
+        from . import supplements
+        supplements.sync_sample(db, h, d, value)
     return row
 
 

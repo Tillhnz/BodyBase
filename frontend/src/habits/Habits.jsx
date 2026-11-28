@@ -8,6 +8,8 @@ import { useExercises } from "../strength/shared.js";
 import { HabitRow } from "./HabitsToday.jsx";
 import HabitYear from "./HabitYear.jsx";
 import Reminder from "./Reminder.jsx";
+import Supplements from "./Supplements.jsx";
+import { useSearchParams } from "react-router-dom";
 
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const COLORS = ["var(--c-recovery)", "var(--c-activity)", "var(--c-heart)", "var(--c-body)", "var(--c-sleep)", "var(--c-nutrition)"];
@@ -17,7 +19,10 @@ export default function Habits() {
   const [edit, setEdit] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const [view, setView] = useState("heute");
-  async function load() { setItems(await api.get(`/habits${showArchived ? "?archived=true" : ""}`)); }
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("ansicht") === "supplements" ? "supplements" : "habits";
+  const setTab = (t) => setParams(t === "supplements" ? { ansicht: "supplements" } : {}, { replace: true });
+  async function load() { setItems((await api.get(`/habits${showArchived ? "?archived=true" : ""}`)).filter((h) => !h.supplement)); }
   useEffect(() => { load().catch(() => setItems([])); }, [showArchived]); // eslint-disable-line react-hooks/exhaustive-deps
   const update = (h) => setItems((cur) => cur.map((x) => (x.id === h.id ? h : x)));
 
@@ -25,9 +30,24 @@ export default function Habits() {
     <div className="cat-recovery">
       <div className="page-head">
         <div>
-          <h1>Gewohnheiten</h1>
-          <p>Kleine Dinge jeden Tag: Liegestütze, Dehnen, Wasser. Mit Zielen, die jede Woche ein Stück wachsen. Übungen zählen auch für die Körperkarte.</p>
+          <h1>{tab === "supplements" ? "Supplements" : "Gewohnheiten"}</h1>
+          <p>{tab === "supplements" ? "Was du nimmst, wann es sinnvoll ist – Vitamin D nach UV-Index an deinem Ort – und ob es wirkt."
+            : "Kleine Dinge jeden Tag: Liegestütze, Dehnen, Wasser. Mit Zielen, die jede Woche ein Stück wachsen. Übungen zählen auch für die Körperkarte."}</p>
         </div>
+        <div className="actions">
+          <Segmented value={tab} onChange={setTab} label="Bereich" options={[{ value: "habits", label: "Gewohnheiten" }, { value: "supplements", label: "💊 Supplements" }]} />
+        </div>
+      </div>
+      {tab === "supplements" ? <Supplements /> : <HabitsMain {...{ items, setItems, edit, setEdit, showArchived, setShowArchived, view, setView, load, update }} />}
+    </div>
+  );
+}
+
+function HabitsMain({ items, edit, setEdit, showArchived, setShowArchived, view, setView, load, update }) {
+  return (
+    <>
+      <div className="page-head" style={{ marginTop: 0 }}>
+        <div />
         <div className="actions">
           <Segmented value={view} onChange={setView} label="Ansicht" options={[{ value: "heute", label: "Aktuell" }, { value: "jahr", label: "Jahresübersicht" }]} />
           <label className="check"><input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />Archivierte zeigen</label>
@@ -43,7 +63,7 @@ export default function Habits() {
         items.map((h) => <section key={h.id} className="panel"><HabitYear habitId={h.id} compact onChanged={load} /></section>)
       ) : items.map((h) => <HabitCard key={h.id} h={h} onChange={update} onEdit={() => setEdit(h)} onReload={load} />)}
       {edit && <HabitForm initial={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); load(); }} />}
-    </div>
+    </>
   );
 }
 

@@ -325,6 +325,25 @@ def recent_changes(db: Session, user, today: date) -> list[dict]:
         elif st28 and st7 < st28 * 0.8:
             out.append({"type": "good", "area": "Bildschirm", "title": f"Weniger Bildschirmzeit: {_hm(st7)} am Tag{trend}", "text": "Mehr Zeit für Bewegung, Schlaf und Erholung.", "link": "/metric/screen_time"})
 
+    # --- Supplements ---
+    try:
+        from . import supplements as SP
+        adv = SP.today_advice(db, user)
+        for it in adv["items"]:
+            a = it["advice"]
+            if it["taken"]:
+                continue
+            if a["level"] == "pause" or (it["key"] == "vitd" and a["level"] == "optional") or (it["key"] == "iron" and a["level"] != "take"):
+                out.append({"type": "tip", "area": "Supplements", "title": f"{it['label']}: {a['title']}", "text": a["text"], "link": "/habits?ansicht=supplements"})
+        has_d = any(it["key"] == "vitd" for it in adv["items"])
+        lab = SP._lab(db, user, "vitd")
+        if not has_d and today.month in (10, 11, 12, 1, 2, 3) and (lab is None or lab[0] < 30):
+            out.append({"type": "tip", "area": "Supplements", "title": "Vitamin-D-Winter",
+                        "text": "Von Oktober bis März bildet die Haut in Deutschland kaum Vitamin D" + (f"; dein letzter Wert lag bei {round(lab[0])} ng/ml." if lab else "."),
+                        "advice": "Üblich sind 1000–2000 IE pro Tag im Winter – unter Supplements kannst du es als Tracker anlegen.", "link": "/habits?ansicht=supplements"})
+    except Exception:  # noqa: BLE001
+        pass
+
     # --- Blutwerte ---
     try:
         from . import labs as L

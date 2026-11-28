@@ -84,6 +84,42 @@ def test_reminder(user: User = Depends(current_user), db: Session = Depends(get_
     return {"ok": True}
 
 
+class LocationIn(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    name: str = Field("", max_length=80)
+
+
+@router.get("/supplements/today")
+def supplements_today(lat: float | None = None, lon: float | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Eigene Supplements mit Empfehlung für heute (Vitamin D nach UV-Index am Ort) und der Katalog."""
+    from .. import supplements as SP
+    return SP.today_advice(db, user, lat, lon)
+
+
+@router.put("/supplements/location")
+def supplements_location(data: LocationIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    prefs = dict(user.prefs or {})
+    prefs["location"] = {"lat": round(data.lat, 3), "lon": round(data.lon, 3), "name": data.name or "eigener Ort", "source": "set"}
+    user.prefs = prefs
+    db.commit()
+    return prefs["location"]
+
+
+@router.delete("/supplements/location", status_code=204)
+def supplements_location_reset(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    prefs = dict(user.prefs or {})
+    prefs.pop("location", None)
+    user.prefs = prefs
+    db.commit()
+
+
+@router.get("/supplements/effects")
+def supplements_effects(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    from .. import supplements as SP
+    return SP.effects(db, user)
+
+
 @router.get("/habits/{habit_id}/history")
 def habit_history(habit_id: int, year: int | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Jahresübersicht einer Gewohnheit (zum Ansehen und Nachtragen)."""
@@ -117,8 +153,13 @@ def update_habit(habit_id: int, body: Body, user: User = Depends(current_user), 
     except H.HabitError as e:
         raise HTTPException(422, str(e))
     v["start"] = v["start"] or h.start
+    old_supp = h.supplement
     for k, val in v.items():
         setattr(h, k, val)
+    if h.supplement != old_supp:  # Dosis oder Art geändert: Messwerte neu schreiben
+        from .. import supplements as SP
+        db.commit()
+        SP.resync(db, h)
     if "archived" in data:
         h.archived = bool(data["archived"])
     db.commit()
